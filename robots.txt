@@ -1,0 +1,37 @@
+# robots.txt for xpwd.org
+# Security and crawling directives
+
+# Allow all well-behaved bots
+User-agent: *
+Allow: /
+
+# Disallow sensitive directories and files
+Disallow: /pages/
+Disallow: /*.bak$
+Disallow: /*.backup$
+Disallow: /*.old$
+Disallow: /.well-known/
+Disallow: /assets/js/*.map
+
+# Crawl delay (optional - uncomment if needed)
+# Crawl-delay: 5
+
+# Sitemap location
+Sitemap: https://xpwd.org/sitemap.xml
+
+# Block specific bots (optional - uncomment if needed)
+# User-agent: BadBot
+# Disallow: /
+
+# Archive.org exception (allow archiving)
+User-agent: ia_archiver
+Allow: /
+
+# Google-specific directives
+User-agent: Googlebot
+Allow: /
+# Disallow: /admin/
+
+# Bing-specific directives
+User-agent: Bingbot
+Allow: /

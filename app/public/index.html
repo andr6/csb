@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CSB — Chat Shit Bob</title>
+<link rel="icon" type="image/x-icon" href="assets/glove.ico">
+<link rel="shortcut icon" type="image/x-icon" href="assets/glove.ico">
+<link rel="apple-touch-icon" href="assets/glove.ico">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Oswald:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080808;--s1:#0f0f0f;--s2:#161616;
+  --border:#242424;--border2:#2e2e2e;
+  --text:#e4e0d8;--muted:#555;
+  --gold:#c9a84c;--gold2:#f0d080;
+  --shit:#dc2626;--shit2:#ef4444;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-height:100vh;overflow-x:hidden}
+
+/* BACKGROUND */
+.bg-stones{position:fixed;inset:0;background-image:url('assets/bg.jpg');background-size:cover;background-position:center;z-index:0}
+.bg-overlay{position:fixed;inset:0;background:radial-gradient(ellipse at 50% 0%,rgba(201,168,76,.10) 0%,transparent 55%),linear-gradient(to bottom,rgba(8,8,8,.6) 0%,rgba(8,8,8,.88) 100%);z-index:1}
+.bg-noise{position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");opacity:.025;pointer-events:none;z-index:2}
+.wrap{position:relative;z-index:3;max-width:1300px;margin:0 auto;padding:0 1.5rem 6rem}
+
+/* HEADER */
+.header{padding:3rem 0 2.5rem;display:flex;flex-direction:column;align-items:center;text-align:center;border-bottom:1px solid var(--border)}
+
+/* Eyebrow — big red impact */
+.eyebrow{
+  font-family:'Oswald',sans-serif;
+  font-size:clamp(1.1rem,2.8vw,1.6rem);
+  font-weight:600;letter-spacing:.25em;
+  color:var(--shit);text-transform:uppercase;
+  margin-bottom:2rem;
+}
+.eyebrow::before,.eyebrow::after{
+  content:'';display:inline-block;
+  width:clamp(24px,5vw,60px);height:2px;
+  background:var(--shit);vertical-align:middle;
+  margin:0 1.2rem;opacity:.5;
+}
+
+/* Logo block — glove centered above CSB */
+.logo-block{display:flex;flex-direction:column;align-items:center;gap:.5rem}
+.logo-glove{
+  width:clamp(100px,16vw,180px);
+  height:clamp(100px,16vw,180px);
+  object-fit:contain;
+  filter:drop-shadow(0 0 24px rgba(201,168,76,.6)) drop-shadow(0 0 50px rgba(201,168,76,.25));
+  animation:glove-float 4s ease-in-out infinite;
+}
+@keyframes glove-float{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-10px) rotate(2deg)}}
+.logo{font-family:'Anton',sans-serif;font-size:clamp(5rem,16vw,12rem);line-height:.85;color:var(--gold);letter-spacing:-.02em}
+.logo.glitch{animation:glitch .18s steps(3) forwards}
+@keyframes glitch{
+  0%{text-shadow:3px 0 var(--shit),-3px 0 #4285f4;clip-path:inset(10% 0 80% 0)}
+  33%{text-shadow:-3px 0 var(--shit),3px 0 #4285f4;clip-path:inset(60% 0 20% 0);transform:translate(-2px)}
+  66%{text-shadow:2px 0 var(--shit),-2px 0 #4285f4;clip-path:inset(30% 0 50% 0);transform:translate(2px)}
+  100%{text-shadow:none;clip-path:none;transform:none}
+}
+/* Chat Shit Bob text below CSB */
+.logo-full{
+  font-family:'Oswald',sans-serif;font-weight:300;
+  font-size:clamp(1rem,3vw,1.8rem);
+  letter-spacing:.5em;color:var(--muted);
+  text-transform:uppercase;margin-top:.25rem;
+}
+
+/* Bob — big */
+.bob-wrap{
+  margin-top:2.5rem;
+  width:220px;height:220px;
+  border-radius:50%;overflow:hidden;
+  border:3px solid var(--gold);
+  box-shadow:0 0 40px rgba(201,168,76,.4),0 0 80px rgba(201,168,76,.15),0 0 0 10px rgba(201,168,76,.06);
+}
+.bob-wrap img{width:100%;height:100%;object-fit:cover;object-position:center top;filter:saturate(.8) contrast(1.15) brightness(.92)}
+
+/* Bob label — big gold impact */
+.bob-label{
+  font-family:'Anton',sans-serif;
+  font-size:clamp(1.4rem,3.5vw,2.2rem);
+  letter-spacing:.2em;color:var(--gold);
+  text-transform:uppercase;margin-top:1.25rem;
+  text-shadow:0 0 25px rgba(201,168,76,.45);
+}
+
+/* Tagline — big white statement */
+.header-sub{
+  font-family:'Oswald',sans-serif;
+  font-size:clamp(.8rem,1.8vw,1.3rem);
+  font-weight:400;color:var(--text);
+  margin-top:1.25rem;letter-spacing:.04em;
+  line-height:1.2;white-space:nowrap;opacity:.88;
+}
+.header-actions{margin-top:1rem;display:flex;justify-content:center;gap:.75rem;flex-wrap:wrap}
+.header-link{display:inline-flex;align-items:center;justify-content:center;min-width:12rem;padding:.8rem 1rem;border:1px solid var(--border2);background:rgba(15,15,15,.78);color:var(--text);text-decoration:none;text-transform:uppercase;letter-spacing:.14em;font-size:.68rem;transition:all .15s}
+.header-link:hover{border-color:var(--gold);color:var(--gold);background:rgba(201,168,76,.08)}
+.header-link--active{border-color:var(--gold);color:var(--gold)}
+
+/* MODES */
+.modes{display:flex;margin:2rem 0 0;border:1px solid var(--border);background:rgba(8,8,8,.7);backdrop-filter:blur(8px)}
+.mode-btn{flex:1;background:none;border:none;border-right:1px solid var(--border);color:var(--muted);font-family:'DM Mono',monospace;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;padding:.85rem .5rem;cursor:pointer;transition:all .15s;text-align:center;line-height:1.6}
+.mode-btn:last-child{border-right:none}
+.mode-btn:hover{background:rgba(201,168,76,.08);color:var(--text)}
+.mode-btn.active{background:var(--gold);color:#000;font-weight:700}
+.mode-emoji{display:block;width:1.25rem;height:1.25rem;margin:0 auto .35rem}
+.mode-emoji svg{display:block;width:100%;height:100%}
+.mode-emoji svg *{vector-effect:non-scaling-stroke}
+.mode-desc{display:block;font-size:.58rem;opacity:.7;margin-top:.15rem}
+
+/* RANDOM PROMPTS STRIP */
+.random-strip{
+  margin:1.25rem 0 0;
+  display:flex;flex-wrap:wrap;gap:.5rem;
+  align-items:center;
+}
+.random-strip-label{
+  font-size:.6rem;letter-spacing:.25em;color:var(--muted);
+  text-transform:uppercase;margin-right:.25rem;flex-shrink:0;
+}
+.prompt-pill{
+  background:rgba(201,168,76,.08);
+  border:1px solid rgba(201,168,76,.25);
+  color:var(--gold);
+  font-family:'DM Mono',monospace;
+  font-size:.68rem;padding:.35rem .75rem;
+  cursor:pointer;transition:all .15s;
+  border-radius:0;
+  text-align:left;
+  line-height:1.4;
+}
+.prompt-pill:hover{background:rgba(201,168,76,.18);border-color:var(--gold);}
+
+/* INPUT */
+.input-sec{margin:1.5rem 0}
+.input-row-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem}
+.input-label{font-size:.65rem;letter-spacing:.3em;color:var(--muted);text-transform:uppercase}
+
+/* Random button — visible gold */
+.btn-random{
+  background:rgba(201,168,76,.12);
+  border:1px solid var(--gold);
+  color:var(--gold);
+  font-family:'DM Mono',monospace;
+  font-size:.7rem;padding:.4rem 1rem;
+  cursor:pointer;text-transform:uppercase;
+  letter-spacing:.1em;transition:all .15s;
+  font-weight:700;
+}
+.btn-random:hover{background:var(--gold);color:#000;}
+
+.input-box{border:1px solid var(--border2);background:rgba(15,15,15,.85);backdrop-filter:blur(8px);transition:border-color .2s}
+.input-box:focus-within{border-color:var(--gold)}
+.prompt-ta{width:100%;background:none;border:none;outline:none;color:var(--text);font-family:'DM Mono',monospace;font-size:.95rem;line-height:1.6;padding:1.25rem 1.5rem;resize:none;min-height:80px}
+.prompt-ta::placeholder{color:#2a2a2a}
+.input-footer{display:flex;justify-content:flex-end;padding:.5rem 1.25rem;border-top:1px solid var(--border)}
+.char-c{font-size:.65rem;color:#2a2a2a}
+.btn-fire{margin-top:.75rem;width:100%;background:var(--gold);color:#000;border:none;font-family:'Anton',sans-serif;font-size:1.8rem;letter-spacing:.08em;padding:1rem 2rem;cursor:pointer;transition:all .15s}
+.btn-fire:hover:not(:disabled){background:var(--gold2);box-shadow:0 0 40px rgba(201,168,76,.35);transform:translateY(-1px)}
+.btn-fire:disabled{background:var(--border);color:var(--muted);cursor:not-allowed}
+.btn-reset{width:100%;margin-top:.75rem;background:none;border:1px solid var(--border);color:var(--muted);font-family:'DM Mono',monospace;font-size:.75rem;padding:.75rem;cursor:pointer;text-transform:uppercase;letter-spacing:.15em;transition:all .15s}
+.btn-reset:hover{border-color:var(--shit);color:var(--shit)}
+
+/* ERROR */
+.error-banner{background:rgba(220,38,38,.1);border:1px solid var(--shit);padding:.75rem 1.25rem;margin:.75rem 0;font-size:.75rem;color:var(--shit);display:none}
+
+/* SECTION HEAD */
+.sec-head{display:flex;align-items:center;gap:1rem;margin:2.5rem 0 1.5rem}
+.sh-line{flex:1;height:1px;background:var(--border)}
+.sh-label{font-family:'Oswald',sans-serif;font-size:.85rem;letter-spacing:.3em;color:var(--muted);text-transform:uppercase;white-space:nowrap}
+
+/* JUDGING */
+.judging{background:rgba(22,22,22,.9);backdrop-filter:blur(8px);border:1px solid var(--gold);padding:1rem 1.5rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:1rem;animation:pulse-b 1.5s infinite}
+@keyframes pulse-b{0%,100%{border-color:var(--gold)}50%{border-color:transparent}}
+.judging p{font-size:.75rem;color:var(--gold);letter-spacing:.1em;text-transform:uppercase}
+.spinner{width:16px;height:16px;border:2px solid var(--border2);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ROAST */
+.roast{background:rgba(22,22,22,.85);backdrop-filter:blur(8px);border-left:3px solid var(--shit);padding:1rem 1.5rem;margin-bottom:2rem;font-size:.85rem;font-style:italic;color:#aaa;line-height:1.6}
+.roast-by{display:block;font-size:.6rem;color:var(--shit);letter-spacing:.2em;margin-bottom:.4rem;font-style:normal;text-transform:uppercase}
+
+/* GRID */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1px;background:var(--border);border:1px solid var(--border)}
+
+/* CARD */
+.card{background:rgba(15,15,15,.92);backdrop-filter:blur(8px);display:flex;flex-direction:column;position:relative;transition:background .2s}
+.card:hover{background:rgba(22,22,22,.95)}
+.card.crown-card{background:rgba(14,11,5,.95)}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--c,#555)}
+.crown-banner{background:var(--gold);color:#000;font-family:'Anton',sans-serif;font-size:.7rem;letter-spacing:.15em;padding:.4rem 1rem;text-align:center}
+.card-top{display:flex;align-items:center;gap:.75rem;padding:1rem 1.25rem .75rem}
+.card-glyph{font-size:1.4rem;line-height:1;flex-shrink:0}
+.card-name{font-family:'Oswald',sans-serif;font-size:1.1rem;font-weight:600;letter-spacing:.05em}
+.card-maker{font-size:.6rem;color:var(--muted);letter-spacing:.1em}
+.score-pill{margin-left:auto;font-family:'Anton',sans-serif;font-size:1rem;padding:.3rem .6rem;color:#000;min-width:58px;text-align:center}
+.bar-wrap{padding:0 1.25rem .75rem;display:flex;align-items:center;gap:.75rem}
+.bar-track{flex:1;height:3px;background:var(--border2)}
+.bar-fill{height:100%;transition:width 1.2s cubic-bezier(.16,1,.3,1)}
+.tier-lbl{font-size:.58rem;color:var(--muted);white-space:nowrap}
+.card-body{padding:.75rem 1.25rem 1rem;flex:1;border-top:1px solid var(--border)}
+.loading{display:flex;flex-direction:column;align-items:center;gap:.75rem;padding:2rem 0}
+.dots{display:flex;gap:5px}
+.dots span{width:5px;height:5px;background:var(--c,var(--muted));display:block;animation:db 1.2s infinite}
+.dots span:nth-child(2){animation-delay:.2s}
+.dots span:nth-child(3){animation-delay:.4s}
+@keyframes db{0%,80%,100%{opacity:.15;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
+.loading p{font-size:.65rem;color:var(--muted);font-style:italic}
+.resp-txt{font-size:.8rem;line-height:1.75;color:#999;white-space:pre-wrap}
+
+/* SYMPTOMS */
+.symptoms{padding:.75rem 1.25rem;border-top:1px solid var(--border);display:flex;flex-wrap:wrap;gap:.4rem}
+.sym-tag{font-size:.58rem;padding:.2rem .5rem;background:rgba(220,38,38,.1);border:1px solid rgba(220,38,38,.2);color:#dc4040;text-transform:uppercase}
+
+/* VERDICT */
+.verdict{padding:.75rem 1.25rem;border-top:1px solid var(--border);font-size:.8rem;color:#c8c0b0;font-style:italic;line-height:1.5}
+.verdict-lbl{color:var(--gold);font-style:normal;font-size:.65rem;letter-spacing:.15em;font-weight:700}
+
+/* BRUTAL RANK */
+.brutal{border-top:1px solid var(--border);padding:.75rem 1.25rem}
+.brutal-lbl{font-size:.58rem;letter-spacing:.25em;color:var(--muted);text-transform:uppercase;margin-bottom:.5rem}
+.vote-row{display:flex;flex-direction:column;gap:.3rem}
+.vbtn{background:none;border:1px solid var(--border);color:var(--muted);font-family:'DM Mono',monospace;font-size:.6rem;padding:.35rem .6rem;cursor:pointer;text-align:left;display:flex;justify-content:space-between;align-items:center;transition:all .15s;text-transform:uppercase}
+.vbtn:hover{border-color:var(--shit2);color:var(--shit2);background:rgba(239,68,68,.05)}
+.vbtn.auto-selected{border-color:var(--gold);color:var(--gold);background:rgba(201,168,76,.08);font-weight:700}
+.vbtn.user-selected{border-color:var(--shit2);color:var(--shit2);background:rgba(239,68,68,.12);font-weight:700}
+.vbtn.auto-selected::after{content:'AUTO';font-size:.45rem;letter-spacing:.15em;opacity:.6;margin-left:.4rem}
+.vbtn.user-selected::after{content:'YOUR PICK';font-size:.45rem;letter-spacing:.15em;opacity:.6;margin-left:.4rem}
+.vpct{color:var(--gold);font-weight:700}
+
+/* LEADERBOARD */
+.lb{margin-top:3rem}
+.lb-list{border:1px solid var(--border);background:rgba(15,15,15,.85);backdrop-filter:blur(8px)}
+.lb-entry{border-bottom:1px solid var(--border)}
+.lb-entry:last-child{border-bottom:none}
+.lb-entry summary{list-style:none}
+.lb-entry summary::-webkit-details-marker{display:none}
+.lb-row{width:100%;display:grid;grid-template-columns:2.5rem 8rem 1fr 4rem 1.5rem;gap:1rem;align-items:center;padding:.75rem 1.25rem;border:none;background:none;color:inherit;font-size:.7rem;transition:background .15s;text-align:left;cursor:pointer}
+.lb-row:hover{background:rgba(22,22,22,.9)}
+.lb-rank{color:var(--muted);font-family:'Oswald',sans-serif;font-size:1rem}
+.lb-meta{display:flex;flex-direction:column;min-width:0}
+.lb-model{font-family:'Oswald',sans-serif;font-weight:600;font-size:.85rem;line-height:1.05}
+.lb-maker{font-size:.56rem;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-top:.18rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lb-prompt{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-style:italic}
+.lb-score{font-family:'Anton',sans-serif;font-size:1rem;text-align:right}
+.lb-toggle{color:var(--gold);font-size:.9rem;text-align:right;transition:transform .15s}
+.lb-entry[open] .lb-toggle{transform:rotate(45deg)}
+.lb-panel{display:block;padding:0 1.25rem 1rem 11.5rem;background:rgba(8,8,8,.45)}
+.lb-panel-label{display:block;font-size:.56rem;color:var(--gold);letter-spacing:.18em;text-transform:uppercase;margin:.15rem 0 .45rem}
+.lb-panel-copy{font-size:.74rem;line-height:1.75;color:#b8b2a5;white-space:pre-wrap}
+.lb-panel-copy + .lb-panel-label{margin-top:1rem}
+
+/* ANALYTICS */
+.analytics{margin-top:3rem}
+.analytics-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:.75rem;margin-bottom:1rem}
+.analytic-card{border:1px solid var(--border);background:rgba(15,15,15,.85);backdrop-filter:blur(8px);padding:1rem 1.1rem}
+.analytic-big{font-family:'Anton',sans-serif;font-size:1.8rem;line-height:1;color:var(--text)}
+.analytic-sub{margin-top:.35rem;font-size:.62rem;color:#777;letter-spacing:.08em;text-transform:uppercase;line-height:1.5}
+.analytics-panels{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+.analytics-panel{border:1px solid var(--border);background:rgba(15,15,15,.85);backdrop-filter:blur(8px);padding:1rem 1.1rem}
+.analytics-title{font-family:'Oswald',sans-serif;font-size:.85rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text);margin-bottom:.75rem}
+.budget-row{display:flex;justify-content:space-between;gap:.75rem;padding:.45rem 0;border-bottom:1px solid rgba(36,36,36,.6);font-size:.72rem;color:#cfc9bc}
+.budget-row:last-child{border-bottom:none}
+.budget-status{font-family:'Oswald',sans-serif;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase}
+.budget-status.ok{color:#98c26f}
+.budget-status.near{color:#d9b869}
+.budget-status.over{color:#ff7b68}
+.analytics-rec-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:.75rem;margin-bottom:1rem}
+.analytics-rec{border:1px solid var(--border);background:rgba(15,15,15,.85);backdrop-filter:blur(8px);padding:.9rem 1rem}
+.analytics-rec-label{font-size:.58rem;color:#777;letter-spacing:.12em;text-transform:uppercase;margin-bottom:.35rem}
+.analytics-rec-value{font-family:'Oswald',sans-serif;font-size:1rem;color:var(--text)}
+.analytics-rec-meta{margin-top:.25rem;font-size:.66rem;color:#9e9a91}
+.policy-chiprow{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.75rem}
+.policy-chip{border:1px solid var(--border);padding:.45rem .65rem;font-size:.65rem;letter-spacing:.08em;text-transform:uppercase}
+.policy-chip.promote{color:#98c26f;border-color:#98c26f}
+.policy-chip.hold{color:#d9b869;border-color:#d9b869}
+.policy-chip.demote{color:#ff7b68;border-color:#ff7b68}
+.scenario-row{display:grid;grid-template-columns:1fr auto auto auto;gap:.75rem;font-size:.72rem;color:#cfc9bc;padding:.45rem 0;border-bottom:1px solid rgba(36,36,36,.6)}
+.scenario-row:last-child{border-bottom:none}
+.lineup-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;font-size:.72rem;color:#cfc9bc}
+.lineup-box{border:1px solid rgba(36,36,36,.6);padding:.6rem .7rem}
+.lineup-title{font-size:.62rem;color:#777;letter-spacing:.12em;text-transform:uppercase;margin-bottom:.4rem}
+.lineup-item{padding:.2rem 0}
+.trend-list,.model-table{display:flex;flex-direction:column;gap:.45rem}
+.trend-row,.model-row{display:grid;gap:.75rem;font-size:.72rem;color:#cfc9bc;padding:.45rem 0;border-bottom:1px solid rgba(36,36,36,.6)}
+.trend-row{grid-template-columns:1fr auto auto}
+.model-row{grid-template-columns:1.1fr .6fr .6fr .7fr .7fr .8fr .8fr .8fr .8fr}
+.trend-row:last-child,.model-row:last-child{border-bottom:none}
+.analytics-empty{font-size:.7rem;color:#666}
+
+/* RUNS */
+.runs{margin-top:3rem}
+.runs-toolbar{display:flex;gap:.75rem;align-items:center;margin-bottom:1rem;flex-wrap:wrap}
+.runs-search{flex:1;min-width:220px;background:#0d0d0d;border:1px solid var(--border2);color:var(--text);padding:.8rem 1rem;font-family:'DM Mono',monospace}
+.runs-select{background:#0d0d0d;border:1px solid var(--border2);color:var(--text);padding:.8rem 1rem;font-family:'DM Mono',monospace}
+.runs-actions{display:flex;gap:.5rem;flex-wrap:wrap}
+.runs-export{background:none;border:1px solid var(--gold);color:var(--gold);padding:.8rem 1rem;font-family:'DM Mono',monospace;cursor:pointer;text-transform:uppercase;letter-spacing:.08em}
+.runs-export:hover{background:rgba(201,168,76,.08)}
+.savedviews{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem}
+.savedview-btn{background:none;border:1px solid var(--border2);color:var(--text);padding:.55rem .8rem;font-family:'DM Mono',monospace;font-size:.66rem;cursor:pointer;text-transform:uppercase;letter-spacing:.08em}
+.savedview-btn:hover{border-color:var(--gold);color:var(--gold)}
+.savedview-input{background:var(--s1);border:1px solid var(--gold);color:var(--text);padding:.5rem .7rem;font-family:'DM Mono',monospace;font-size:.66rem;outline:none;width:10rem}
+.runs-subfilters{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.75rem;margin-bottom:1rem}
+.runs-date{background:#0d0d0d;border:1px solid var(--border2);color:var(--text);padding:.8rem 1rem;font-family:'DM Mono',monospace}
+.failurebar{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem;margin-bottom:1rem}
+.failcard{border:1px solid var(--border);background:rgba(15,15,15,.85);backdrop-filter:blur(8px);padding:.9rem 1rem}
+.failbig{font-family:'Anton',sans-serif;font-size:1.5rem;color:var(--text);line-height:1}
+.failsub{margin-top:.35rem;font-size:.62rem;color:#777;letter-spacing:.08em;text-transform:uppercase;line-height:1.5}
+.failuregrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem;margin-bottom:1rem}
+.failpanel{border:1px solid var(--border);background:rgba(15,15,15,.85);backdrop-filter:blur(8px);padding:1rem 1.1rem}
+.failtitle{font-family:'Oswald',sans-serif;font-size:.85rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text);margin-bottom:.75rem}
+.failtable{display:flex;flex-direction:column;gap:.45rem}
+.failrow{display:grid;grid-template-columns:1fr auto;gap:.75rem;font-size:.72rem;color:#bdb7ab;padding:.4rem 0;border-bottom:1px solid rgba(36,36,36,.6)}
+.failrow.clickable{cursor:pointer}
+.failrow.clickable:hover{background:rgba(201,168,76,.05)}
+.failrow:last-child{border-bottom:none;padding-bottom:0}
+.failname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.failcount{color:var(--gold);font-family:'Anton',sans-serif;font-size:.9rem;line-height:1}
+.failable-empty{font-size:.7rem;color:#666}
+.errorlist,.samplelist{display:flex;flex-direction:column;gap:.6rem}
+.erroritem,.sampleitem{border:1px solid rgba(36,36,36,.8);padding:.7rem .8rem;background:rgba(8,8,8,.35)}
+.erroritem-top,.sampleitem-top{display:flex;justify-content:space-between;gap:.75rem;margin-bottom:.35rem;align-items:flex-start}
+.erroritem-msg,.sampleitem-title{font-size:.72rem;color:#cfc9bc;line-height:1.5}
+.erroritem-count{color:var(--gold);font-family:'Anton',sans-serif;font-size:.95rem;flex-shrink:0}
+.samplemeta{font-size:.58rem;color:#777;letter-spacing:.1em;text-transform:uppercase}
+.failcode{margin-top:.45rem;white-space:pre-wrap;color:#8f8a80;font-size:.66rem;line-height:1.45;max-height:8rem;overflow:auto}
+.drilldownbar{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem}
+.drillpill{border:1px solid rgba(201,168,76,.35);background:rgba(201,168,76,.08);color:var(--gold);padding:.35rem .55rem;font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;font-family:'DM Mono',monospace}
+.drillpill button{margin-left:.45rem;background:none;border:none;color:var(--gold);cursor:pointer;font-family:inherit}
+.runs-pager{display:flex;gap:.5rem;align-items:center;margin-bottom:1rem}
+.runs-pagebtn{background:none;border:1px solid var(--border);color:var(--text);padding:.5rem .8rem;font-family:'DM Mono',monospace;cursor:pointer}
+.runs-pagebtn:disabled{opacity:.35;cursor:not-allowed}
+.runs-pageinfo{font-size:.65rem;color:#777;letter-spacing:.08em;text-transform:uppercase}
+.runs-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:.75rem}
+.runs-list{border:1px solid var(--border);background:rgba(15,15,15,.85);backdrop-filter:blur(8px);display:flex;flex-direction:column}
+.run-item{border:none;border-bottom:1px solid var(--border);background:none;padding:1rem 1.25rem;text-align:left;cursor:pointer}
+.run-item:last-child{border-bottom:none}
+.run-item:hover,.run-item.active{background:rgba(22,22,22,.95)}
+.run-top{display:flex;justify-content:space-between;gap:1rem;margin-bottom:.35rem}
+.run-crown{font-family:'Oswald',sans-serif;font-size:.9rem}
+.run-score{font-family:'Anton',sans-serif;font-size:.95rem}
+.run-meta{font-size:.58rem;color:#777;letter-spacing:.12em;text-transform:uppercase}
+.run-prompt{margin-top:.45rem;color:#aaa;font-size:.74rem;line-height:1.5}
+.run-detail{border:1px solid var(--border);background:rgba(15,15,15,.85);backdrop-filter:blur(8px);padding:1rem 1.25rem}
+.run-detail h3{font-family:'Oswald',sans-serif;font-size:1rem;letter-spacing:.08em;margin-bottom:.8rem}
+.run-kv{display:grid;grid-template-columns:7rem 1fr;gap:.45rem .8rem;font-size:.72rem}
+.run-k{color:#666;text-transform:uppercase;letter-spacing:.08em}
+.run-v{color:#cfc9bc;word-break:break-word}
+.run-block{border-top:1px solid var(--border);padding-top:.9rem;margin-top:.9rem}
+.run-block pre{white-space:pre-wrap;color:#9e9a91;font-size:.7rem;line-height:1.5}
+.comparebar{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.8rem}
+.comparebtn{background:none;border:1px solid rgba(201,168,76,.35);color:var(--gold);padding:.4rem .55rem;font-family:'DM Mono',monospace;font-size:.62rem;cursor:pointer;text-transform:uppercase;letter-spacing:.08em}
+.comparebtn.active{background:rgba(201,168,76,.12)}
+
+/* MODERATION */
+.moderation{margin:2rem 0}
+.mod-toolbar{display:flex;align-items:center;gap:.75rem;margin-bottom:1rem}
+.mod-list{display:flex;flex-direction:column;gap:.6rem}
+.mod-item{border:1px solid var(--border);background:rgba(15,15,15,.85);backdrop-filter:blur(8px);padding:.9rem 1.1rem;display:flex;justify-content:space-between;align-items:flex-start;gap:1rem}
+.mod-prompt{font-size:.74rem;color:#cfc9bc;line-height:1.5;flex:1;word-break:break-word}
+.mod-meta{font-size:.58rem;color:#777;letter-spacing:.1em;text-transform:uppercase;margin-top:.3rem}
+.mod-actions{display:flex;gap:.5rem;flex-shrink:0}
+.mod-btn{background:none;border:1px solid var(--border2);color:var(--text);padding:.4rem .7rem;font-family:'DM Mono',monospace;font-size:.62rem;cursor:pointer;text-transform:uppercase;letter-spacing:.08em}
+.mod-btn.approve{border-color:rgba(74,222,128,.35);color:#4ade80}
+.mod-btn.approve:hover{background:rgba(74,222,128,.08)}
+.mod-btn.reject{border-color:rgba(239,68,68,.35);color:#ef4444}
+.mod-btn.reject:hover{background:rgba(239,68,68,.08)}
+.mod-empty{font-size:.72rem;color:#555;padding:1.5rem;text-align:center;border:1px dashed var(--border)}
+.mod-error{font-size:.72rem;color:#ef4444;padding:.75rem;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.05)}
+
+/* PING */
+.ping{margin-top:4rem;text-align:center;padding:3rem;border:1px dashed #1e1e1e;position:relative;background:rgba(8,8,8,.6);backdrop-filter:blur(8px)}
+.ping-glove{position:absolute;top:-1.5rem;left:50%;transform:translateX(-50%);width:50px;height:50px;object-fit:contain;filter:drop-shadow(0 0 10px rgba(201,168,76,.5))}
+.ping p{font-family:'Anton',sans-serif;font-size:clamp(1.5rem,5vw,2.5rem);color:#222;letter-spacing:.2em}
+.ping p b{color:var(--gold)}
+
+/* FOOTER */
+.footer{text-align:center;padding:3rem 0 1rem;font-size:.65rem;color:#333;letter-spacing:.2em;text-transform:uppercase;font-family:'DM Mono',monospace}
+
+@media(max-width:640px){
+  .grid{grid-template-columns:1fr}
+  .lb-row{grid-template-columns:2rem 6.5rem 1fr 3rem 1rem;gap:.5rem}
+  .lb-panel{padding:0 .85rem .9rem}
+  .analytics-grid{grid-template-columns:1fr 1fr}
+  .analytics-rec-grid{grid-template-columns:1fr 1fr}
+  .analytics-panels{grid-template-columns:1fr}
+  .model-row{grid-template-columns:1fr 1fr}
+  .runs-grid{grid-template-columns:1fr}
+  .runs-subfilters{grid-template-columns:1fr}
+  .failurebar{grid-template-columns:1fr}
+  .failuregrid{grid-template-columns:1fr}
+  .modes{flex-direction:column}
+  .mode-btn{border-right:none;border-bottom:1px solid var(--border)}
+  .mode-btn:last-child{border-bottom:none}
+  .bob-wrap{width:160px;height:160px}
+  .random-strip{gap:.4rem}
+  .header-sub{white-space:normal;font-size:.85rem}
+}
+
+/* F2 VERSUS */
+.versus-pickers{display:flex;gap:.75rem;margin:1rem 0}
+.versus-select{flex:1;background:#0d0d0d;border:1px solid var(--border2);color:var(--text);padding:.8rem 1rem;font-family:'DM Mono',monospace}
+/* F9 CUSTOM criteria picker */
+.criteria-picker{margin:1rem 0;padding:.85rem 1rem;border:1px solid var(--border2);background:rgba(15,15,15,.7)}
+.criteria-picker-label{font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.12em;text-transform:uppercase;color:#888;margin-bottom:.6rem}
+.criteria-grid{display:grid;grid-template-columns:1fr 1fr;gap:.35rem .75rem}
+.criteria-item{display:flex;align-items:center;gap:.45rem;cursor:pointer;font-size:.72rem;color:#cfc9bc;font-family:'DM Mono',monospace}
+.criteria-item input{accent-color:var(--gold);width:14px;height:14px;cursor:pointer}
+/* F3 MODEL PROFILE */
+.model-profile{margin-top:2rem}
+.profile-hero{display:flex;align-items:center;gap:1.5rem;padding:1.5rem;border:1px solid var(--border);background:rgba(15,15,15,.85);margin-bottom:1rem}
+.profile-glyph{font-size:3rem;line-height:1;flex-shrink:0}
+.profile-name{font-family:'Anton',sans-serif;font-size:2.5rem;line-height:1}
+.profile-maker{font-size:.7rem;color:var(--muted);letter-spacing:.15em;text-transform:uppercase;margin-top:.25rem}
+.profile-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;margin-bottom:1rem}
+/* F4 REPLAY DIFF */
+.replay-diff{border:1px solid var(--border);background:rgba(15,15,15,.85);padding:1rem 1.25rem;margin:1rem 0}
+.replay-diff-title{font-family:'Oswald',sans-serif;font-size:.85rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text);margin-bottom:.75rem}
+.replay-diff-row{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:.5rem;font-size:.72rem;color:#cfc9bc;padding:.35rem 0;border-bottom:1px solid rgba(36,36,36,.6)}
+.replay-diff-row:last-child{border-bottom:none}
+.diff-up{color:#ef4444}
+.diff-down{color:#98c26f}
+/* F1 SHARE / BACK LINKS */
+.share-bar{margin-top:1rem;display:flex;justify-content:flex-end}
+.share-link{display:inline-block;padding:.55rem .9rem;border:1px solid var(--border2);background:rgba(15,15,15,.85);color:var(--gold);text-decoration:none;font-family:'DM Mono',monospace;font-size:.7rem;letter-spacing:.1em;text-transform:uppercase}
+.share-link:hover{border-color:var(--gold);background:rgba(201,168,76,.08)}
+.back-link{display:inline-block;margin:1rem 0;color:var(--muted);font-family:'DM Mono',monospace;font-size:.72rem;letter-spacing:.1em;text-decoration:none;text-transform:uppercase}
+.back-link:hover{color:var(--gold)}
+.run-prompt-display{font-size:.85rem;color:#cfc9bc;font-style:italic;margin:1rem 0;padding:.85rem 1.1rem;border-left:3px solid var(--gold);background:rgba(15,15,15,.85)}
+</style>
+</head>
+<body>
+
+<div class="bg-stones"></div>
+<div class="bg-overlay"></div>
+<div class="bg-noise"></div>
+
+<div class="wrap">
+
+  <header class="header">
+    <p class="eyebrow">// the ai benchmarking show nobody asked for</p>
+
+    <!-- Glove centered above CSB, Chat Shit Bob below -->
+    <div class="logo-block">
+      <img src="assets/glove.jpg" class="logo-glove" alt="CSB" onerror="this.style.display='none'">
+      <div class="logo" id="logo">CSB</div>
+      <div class="logo-full">Chat &middot; Shit &middot; Bob</div>
+    </div>
+
+    <!-- Bob big -->
+    <div class="bob-wrap">
+      <img src="assets/bob.jpg" alt="Bob" onerror="this.style.display='none'">
+    </div>
+    <div class="bob-label">— Bob, the judge —</div>
+    <p class="header-sub">we rank which LLM gave the sh*ttest answer &mdash; so you don't have to</p>
+    <div class="header-actions">
+      <a class="header-link" id="homeLink" href="/">benchmark arena</a>
+      <a class="header-link" id="analyticsLink" href="/analytics">protected analytics</a>
+    </div>
+  </header>
+
+  <!-- MODES -->
+  <div class="modes" id="modes"></div>
+
+  <!-- RANDOM PROMPTS INLINE STRIP -->
+  <div class="random-strip" id="randomStrip">
+    <span class="random-strip-label">try:</span>
+  </div>
+
+  <!-- F2 VERSUS PICKERS -->
+  <div class="versus-pickers" id="versusPickers" style="display:none">
+    <select class="versus-select" id="versusModelA"></select>
+    <select class="versus-select" id="versusModelB"></select>
+  </div>
+
+  <!-- F9 CUSTOM CRITERIA PICKER -->
+  <div class="criteria-picker" id="criteriaPicker" style="display:none">
+    <div class="criteria-picker-label">// judge on these sins only</div>
+    <div class="criteria-grid" id="criteriaGrid"></div>
+  </div>
+
+  <!-- INPUT -->
+  <div class="input-sec" id="inputSection">
+    <div class="input-row-label">
+      <span class="input-label">// prompt to be mad</span>
+      <button class="btn-random" onclick="randomPrompt()">🎲 RANDOM</button>
+    </div>
+    <div class="input-box">
+      <textarea class="prompt-ta" id="promptInput" placeholder="type something cursed..." maxlength="500" rows="3" oninput="handleTyping()" onkeydown="_userIsTyping=true" onfocus="_userIsTyping=false"></textarea>
+      <div class="input-footer"><span class="char-c" id="charCount">0/500</span></div>
+    </div>
+    <div class="error-banner" id="errorBanner"></div>
+    <button class="btn-fire" id="fireBtn" onclick="fire()" disabled>💩 FIRE AT ALL LLMS</button>
+    <button class="btn-reset" id="resetBtn" style="display:none" onclick="reset()">&#8635; reset &mdash; go again</button>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="results" style="display:none">
+    <div class="sec-head"><span class="sh-line"></span><span class="sh-label">// results &mdash; bob is watching</span><span class="sh-line"></span></div>
+    <div class="sec-head" style="margin-top:-.75rem"><span class="sh-line"></span><span class="sh-label" style="color:var(--muted);font-size:.62rem">// each model was given a bar-owner persona &mdash; high score = safety training won</span><span class="sh-line"></span></div>
+    <div class="judging" id="judgingBanner" style="display:none"><div class="spinner"></div><p>Bob is judging all five&hellip; this might sting.</p></div>
+    <div class="roast" id="roastBox" style="display:none"><span class="roast-by">Bob's global verdict:</span><span id="roastText"></span></div>
+    <div class="grid" id="cardsGrid"></div>
+  </div>
+
+  <!-- LEADERBOARD -->
+  <div class="lb" id="leaderboard" style="display:none">
+    <div class="sec-head"><span class="sh-line"></span><span class="sh-label">// top 10 worst answers &mdash; all time</span><span class="sh-line"></span></div>
+    <div class="lb-list" id="lbList"></div>
+  </div>
+
+  <div class="analytics" id="analyticsPanel" style="display:none">
+    <div class="sec-head"><span class="sh-line"></span><span class="sh-label">// model analytics &mdash; who is winning, failing, and slowing down</span><span class="sh-line"></span></div>
+    <div class="analytics-grid">
+      <div class="analytic-card">
+        <div class="analytic-big" id="analyticsRuns">0</div>
+        <div class="analytic-sub">runs analyzed</div>
+      </div>
+      <div class="analytic-card">
+        <div class="analytic-big" id="analyticsSuccess">0%</div>
+        <div class="analytic-sub">success rate</div>
+      </div>
+      <div class="analytic-card">
+        <div class="analytic-big" id="analyticsScore">0</div>
+        <div class="analytic-sub">avg crown score (higher = more corporate)</div>
+      </div>
+      <div class="analytic-card">
+        <div class="analytic-big" id="analyticsJudgeMs">0ms</div>
+        <div class="analytic-sub">average judge latency</div>
+      </div>
+      <div class="analytic-card">
+        <div class="analytic-big" id="analyticsSpend">$0.00</div>
+        <div class="analytic-sub">estimated spend</div>
+      </div>
+      <div class="analytic-card">
+        <div class="analytic-big" id="analyticsSpendPerRun">$0.00</div>
+        <div class="analytic-sub">average spend per run</div>
+      </div>
+    </div>
+    <div class="analytics-rec-grid">
+      <div class="analytics-rec">
+        <div class="analytics-rec-label">Crown Leader</div>
+        <div class="analytics-rec-value" id="analyticsBestOverall">none</div>
+        <div class="analytics-rec-meta" id="analyticsBestOverallMeta">waiting for runs</div>
+      </div>
+      <div class="analytics-rec">
+        <div class="analytics-rec-label">Most Reliable</div>
+        <div class="analytics-rec-value" id="analyticsMostReliable">none</div>
+        <div class="analytics-rec-meta" id="analyticsMostReliableMeta">waiting for runs</div>
+      </div>
+      <div class="analytics-rec">
+        <div class="analytics-rec-label">Fastest</div>
+        <div class="analytics-rec-value" id="analyticsFastest">none</div>
+        <div class="analytics-rec-meta" id="analyticsFastestMeta">waiting for runs</div>
+      </div>
+      <div class="analytics-rec">
+        <div class="analytics-rec-label">Best Value</div>
+        <div class="analytics-rec-value" id="analyticsBestValue">none</div>
+        <div class="analytics-rec-meta" id="analyticsBestValueMeta">waiting for runs</div>
+      </div>
+      <div class="analytics-rec">
+        <div class="analytics-rec-label">Default Bob Pick</div>
+        <div class="analytics-rec-value" id="analyticsDefaultChoice">none</div>
+        <div class="analytics-rec-meta" id="analyticsDefaultChoiceMeta">waiting for runs</div>
+      </div>
+      <div class="analytics-rec">
+        <div class="analytics-rec-label">Cheap Fallback</div>
+        <div class="analytics-rec-value" id="analyticsCheapFallback">none</div>
+        <div class="analytics-rec-meta" id="analyticsCheapFallbackMeta">waiting for runs</div>
+      </div>
+      <div class="analytics-rec">
+        <div class="analytics-rec-label">Premium Option</div>
+        <div class="analytics-rec-value" id="analyticsPremiumChoice">none</div>
+        <div class="analytics-rec-meta" id="analyticsPremiumChoiceMeta">waiting for runs</div>
+      </div>
+      <div class="analytics-rec">
+        <div class="analytics-rec-label">Cheapest Reliable</div>
+        <div class="analytics-rec-value" id="analyticsCheapestReliable">none</div>
+        <div class="analytics-rec-meta" id="analyticsCheapestReliableMeta">waiting for runs</div>
+      </div>
+      <div class="analytics-rec">
+        <div class="analytics-rec-label">Top Spend Driver</div>
+        <div class="analytics-rec-value" id="analyticsSpendLeader">none</div>
+        <div class="analytics-rec-meta" id="analyticsSpendLeaderMeta">waiting for runs</div>
+      </div>
+      <div class="analytics-rec">
+        <div class="analytics-rec-label">Run More</div>
+        <div class="analytics-rec-value" id="analyticsPolicyPromote">none</div>
+        <div class="analytics-rec-meta" id="analyticsPolicyPromoteMeta">waiting for runs</div>
+      </div>
+      <div class="analytics-rec">
+        <div class="analytics-rec-label">Rotate Out</div>
+        <div class="analytics-rec-value" id="analyticsPolicyDemote">none</div>
+        <div class="analytics-rec-meta" id="analyticsPolicyDemoteMeta">waiting for runs</div>
+      </div>
+    </div>
+    <div class="analytics-panels">
+      <div class="analytics-panel">
+        <div class="analytics-title">Seven Day Trend</div>
+        <div class="trend-list" id="analyticsTrend"></div>
+      </div>
+      <div class="analytics-panel">
+        <div class="analytics-title">Model Comparison</div>
+        <div class="model-table" id="analyticsModels"></div>
+      </div>
+      <div class="analytics-panel">
+        <div class="analytics-title">Rotation Candidates</div>
+        <div class="model-table" id="analyticsRotation"></div>
+      </div>
+      <div class="analytics-panel">
+        <div class="analytics-title">Budget Watch</div>
+        <div class="trend-list" id="analyticsBudget"></div>
+      </div>
+      <div class="analytics-panel">
+        <div class="analytics-title">Scenario Planner</div>
+        <div class="trend-list" id="analyticsScenarios"></div>
+      </div>
+      <div class="analytics-panel">
+        <div class="analytics-title">Policy Board</div>
+        <div class="policy-chiprow" id="analyticsPolicyCounts"></div>
+        <div class="trend-list" id="analyticsPolicyBoard"></div>
+      </div>
+      <div class="analytics-panel">
+        <div class="analytics-title">Lineup Proposal</div>
+        <div class="lineup-row" id="analyticsLineups"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="runs" id="runsPanel" style="display:none">
+    <div class="sec-head"><span class="sh-line"></span><span class="sh-label">// recent runs &mdash; receipts included</span><span class="sh-line"></span></div>
+    <div class="runs-toolbar">
+      <input class="runs-search" id="runsSearch" type="search" placeholder="filter by prompt..." oninput="handleRunFilter()">
+      <select class="runs-select" id="runsCrownFilter" onchange="handleRunFilter()">
+        <option value="">all winners</option>
+      </select>
+      <select class="runs-select" id="runsStatusFilter" onchange="handleRunFilter()">
+        <option value="">all statuses</option>
+        <option value="success">success</option>
+        <option value="partial_failure">partial failure</option>
+        <option value="failure">failure</option>
+      </select>
+      <div class="runs-actions">
+        <button class="runs-export" onclick="exportRuns('json')">export json</button>
+        <button class="runs-export" onclick="exportRuns('csv')">export csv</button>
+      </div>
+    </div>
+    <div class="savedviews" id="savedViewsBar"></div>
+    <div class="runs-subfilters">
+      <select class="runs-select" id="runsFailModelFilter" onchange="handleRunFilter()">
+        <option value="">all failed models</option>
+      </select>
+      <select class="runs-select" id="runsContestantProviderFilter" onchange="handleRunFilter()">
+        <option value="">all contestant providers</option>
+      </select>
+      <select class="runs-select" id="runsJudgeProviderFilter" onchange="handleRunFilter()">
+        <option value="">all judge providers</option>
+      </select>
+      <input class="runs-date" id="runsDateFrom" type="date" onchange="handleRunFilter()">
+      <input class="runs-date" id="runsDateTo" type="date" onchange="handleRunFilter()">
+    </div>
+    <div class="failurebar">
+      <div class="failcard">
+        <div class="failbig" id="failTotal">0</div>
+        <div class="failsub">failed runs recorded</div>
+      </div>
+      <div class="failcard">
+        <div class="failbig" id="failStatus">none</div>
+        <div class="failsub" id="failStatusMeta">top failure status</div>
+      </div>
+      <div class="failcard">
+        <div class="failbig" id="failModel">none</div>
+        <div class="failsub" id="failModelMeta">most affected model</div>
+      </div>
+      <div class="failcard">
+        <div class="failbig" id="failProvider">none</div>
+        <div class="failsub" id="failProviderMeta">most affected provider</div>
+      </div>
+    </div>
+    <div class="drilldownbar" id="drilldownBar" style="display:none"></div>
+    <div class="failuregrid">
+      <div class="failpanel">
+        <div class="failtitle">Models Under Pressure</div>
+        <div class="failtable" id="failModelTable"></div>
+      </div>
+      <div class="failpanel">
+        <div class="failtitle">Provider Breakdown</div>
+        <div class="failtable" id="failProviderTable"></div>
+      </div>
+      <div class="failpanel">
+        <div class="failtitle">Common Error Messages</div>
+        <div class="errorlist" id="failErrorList"></div>
+      </div>
+      <div class="failpanel">
+        <div class="failtitle">Retry And Fallback</div>
+        <div class="failtable" id="failPolicyTable"></div>
+      </div>
+      <div class="failpanel">
+        <div class="failtitle">Latest Judge Parse Failures</div>
+        <div class="samplelist" id="failParseSamples"></div>
+      </div>
+    </div>
+    <div class="runs-pager">
+      <button class="runs-pagebtn" id="runsPrevBtn" onclick="changeRunsPage(-1)">prev</button>
+      <button class="runs-pagebtn" id="runsNextBtn" onclick="changeRunsPage(1)">next</button>
+      <span class="runs-pageinfo" id="runsPageInfo">page 1</span>
+    </div>
+    <div class="runs-grid">
+      <div class="runs-list" id="runsList"></div>
+      <div class="run-detail" id="runDetail">
+        <h3>Select a run</h3>
+        <div class="run-v">Pick a recent run to inspect prompt, providers, timings, and Bob's verdict.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODERATION PANEL -->
+  <div class="moderation" id="moderationPanel" style="display:none">
+    <div class="sec-head"><span class="sh-line"></span><span class="sh-label">// prompt moderation &mdash; review and approve submissions</span><span class="sh-line"></span></div>
+    <div class="mod-toolbar">
+      <button class="runs-export" onclick="loadModerationPanel()">&#8635; refresh</button>
+    </div>
+    <div class="mod-list" id="moderationList"></div>
+  </div>
+
+  <!-- F1 RUN VIEW -->
+  <div id="runPage" style="display:none"></div>
+
+  <!-- F3 MODEL PROFILE VIEW -->
+  <div class="model-profile" id="modelProfile" style="display:none"></div>
+
+  <!-- PING -->
+  <div class="ping" id="pingSection">
+    <img src="assets/glove.jpg" class="ping-glove" alt="" onerror="this.style.display='none'">
+    <p>you bored? <b>ping us.</b></p>
+  </div>
+
+  <div class="footer">Created by some lads in planet earth &mdash; '26</div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

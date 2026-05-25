@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Runtime data — not committed (created automatically)
+data/
+
+# Environment & secrets
+.env
+.env.*
+!env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Agent scaffolding (empty placeholder dirs)
+.agents/
+.codex/
