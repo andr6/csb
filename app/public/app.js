@@ -110,6 +110,7 @@ const SYMPTOMS = [
 ];
 
 // STATE
+var _pageToken = "";
 var isAnalyticsPage = window.location.pathname === "/analytics";
 var runPagePath = window.location.pathname.indexOf("/run/") === 0 ? window.location.pathname.split("/run/")[1] : "";
 var modelProfilePath = window.location.pathname.indexOf("/model/") === 0 ? window.location.pathname.split("/model/")[1] : "";
@@ -247,6 +248,7 @@ function init() {
         CURATED.absurd = promptsPayload.absurd || CURATED.absurd;
         CURATED.truth  = promptsPayload.truth  || CURATED.truth;
       }
+      if (cfg._token) _pageToken = cfg._token;
       var modelMap = cfg.models || {};
       // Build MODELS array dynamically — no hardcoded metadata needed
       MODELS = Object.keys(modelMap).map(function(id) {
@@ -856,7 +858,7 @@ async function fireModel(prompt, modelId) {
   var started = performance.now();
   const res = await fetch("/api/fire", {
     method: "POST",
-    headers: {"Content-Type":"application/json"},
+    headers: {"Content-Type":"application/json", "X-Page-Token": _pageToken},
     body: JSON.stringify({prompt, modelId}),
   });
   var data;
@@ -901,7 +903,7 @@ async function judgeResponses(prompt, allResponses, modelsOverride) {
 
   const res = await fetch("/api/judge", {
     method: "POST",
-    headers: {"Content-Type":"application/json"},
+    headers: {"Content-Type":"application/json", "X-Page-Token": _pageToken},
     body: JSON.stringify(Object.assign({
       prompt: prompt,
       responses: judgableList.reduce(function(out, model) {

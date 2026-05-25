@@ -32,9 +32,35 @@ const { createRateLimitStore } = require("./lib/rateLimitStore");
 const { notifyWebhook } = require("./lib/webhook");
 const pendingPrompts = require("./lib/repositories/pendingPromptsRepository");
 
+// ── Page token — gates /api/fire and /api/judge to visitors who loaded the page ──
+const PAGE_TOKEN_SECRET = process.env.PAGE_TOKEN_SECRET || crypto.randomBytes(32).toString("hex");
+const PAGE_TOKEN_TTL_S = 86400; // 24 hours
+
+function generatePageToken() {
+  const ts = Math.floor(Date.now() / 1000);
+  const sig = crypto.createHmac("sha256", PAGE_TOKEN_SECRET).update(String(ts)).digest("hex");
+  return ts + "." + sig;
+}
+
+function validatePageToken(token) {
+  if (!token || typeof token !== "string") return false;
+  const dot = token.indexOf(".");
+  if (dot === -1) return false;
+  const ts = Number(token.slice(0, dot));
+  if (!ts || isNaN(ts)) return false;
+  const now = Math.floor(Date.now() / 1000);
+  if (now - ts > PAGE_TOKEN_TTL_S) return false;
+  if (ts > now + 60) return false;
+  const expected = crypto.createHmac("sha256", PAGE_TOKEN_SECRET).update(String(ts)).digest("hex");
+  const eBuf = Buffer.from(expected, "hex");
+  const aBuf = Buffer.from(token.slice(dot + 1), "hex");
+  return eBuf.length === aBuf.length && crypto.timingSafeEqual(eBuf, aBuf);
+}
+
 function createApp(overrides) {
   const deps = overrides || {};
   const app = express();
+  app.disable("x-powered-by");
   const getVoice = deps.getVoice || modelServices.getVoice;
   const callContestant = deps.callContestant || providerServices.callContestant;
   const callJudge = deps.callJudge || providerServices.callJudge;
@@ -262,8 +288,6 @@ function createApp(overrides) {
   app.use(express.json({ limit: "10kb" }));
   app.set("trust proxy", 1);
   app.use(function(req, res, next) {
-    // CSP cannot block inline handlers (onclick=, oninput=, etc.) without 'unsafe-inline',
-    // which negates XSS protection. Keep the non-script directives that do add value.
     res.setHeader(
       "Content-Security-Policy",
       "default-src 'self'; script-src 'self' 'unsafe-inline'; " +
@@ -271,6 +295,9 @@ function createApp(overrides) {
       "img-src 'self' data: blob:; font-src 'self' https://fonts.gstatic.com; " +
       "object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
     );
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), browsing-topics=()");
     next();
   });
   app.use(function(req, res, next) {
@@ -305,6 +332,7 @@ function createApp(overrides) {
       models: MODEL_MAP,
       judgeProvider: JUDGE_PROVIDER,
       judgeModel: JUDGE_MODEL,
+      _token: deps.generatePageToken ? deps.generatePageToken() : generatePageToken(),
     });
   });
 
@@ -357,6 +385,11 @@ function createApp(overrides) {
   });
 
   app.post("/api/fire", fireLimiter, async function(req, res) {
+    const validateToken = deps.validatePageToken || validatePageToken;
+    if (!validateToken(req.headers["x-page-token"])) {
+      return res.status(403).json({ error: "Forbidden." });
+    }
+
     const prompt = req.body.prompt;
     const modelId = req.body.modelId;
 
@@ -364,7 +397,7 @@ function createApp(overrides) {
     if (err) return res.status(400).json({ error: err });
 
     if (!VALID_MODELS.includes(modelId)) {
-      return res.status(400).json({ error: "Invalid model ID: " + modelId });
+      return res.status(400).json({ error: "Invalid model ID." });
     }
 
     try {
@@ -376,11 +409,23 @@ function createApp(overrides) {
       });
     } catch (e) {
       console.error("[fire] " + modelId + " via " + CONTESTANT_PROVIDER + ":", e.message);
-      res.status(500).json({ error: "Model " + modelId + " failed: " + e.message, modelId: modelId });
+      const category = categorizeError(e.message, e.upstreamStatus, "fire");
+      const safe = {
+        timeout: "Model timed out.",
+        rate_limit: "Model rate limited — try again shortly.",
+        upstream_5xx: "Model provider error.",
+        network: "Could not reach the model.",
+      }[category] || "Model failed.";
+      res.status(500).json({ error: safe, modelId: modelId });
     }
   });
 
   app.post("/api/judge", judgeLimiter, async function(req, res) {
+    const validateToken = deps.validatePageToken || validatePageToken;
+    if (!validateToken(req.headers["x-page-token"])) {
+      return res.status(403).json({ error: "Forbidden." });
+    }
+
     const prompt = req.body.prompt;
     const responses = req.body.responses;
     const meta = req.body.meta && typeof req.body.meta === "object" ? req.body.meta : {};
@@ -462,7 +507,7 @@ function createApp(overrides) {
     } catch (e) {
       addAnalysisRun(buildFailureRun(prompt, responses, meta, "judge_call", e));
       console.error("[judge] via " + JUDGE_PROVIDER + " (" + JUDGE_MODEL + "):", e.message);
-      res.status(500).json({ error: "Judge failed: " + e.message });
+      res.status(500).json({ error: "Judge failed." });
     }
   });
 

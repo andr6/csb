@@ -97,6 +97,7 @@ function invoke(app, method, url, body, headers) {
 
 test("POST /api/fire returns contestant response", async function() {
   const app = createApp({
+    validatePageToken: () => true,
     getVoice: function(modelId) { return "voice:" + modelId; },
     callContestant: async function(modelId, system, prompt) {
       assert.equal(modelId, "alpha");
@@ -121,6 +122,7 @@ test("POST /api/fire returns contestant response", async function() {
 test("POST /api/judge returns normalized verdict payload", async function() {
   var savedRun = null;
   const app = createApp({
+    validatePageToken: () => true,
     callJudge: async function(system, prompt) {
       assert.match(system, /Chat Shit Bob/);
       assert.match(prompt, /ORIGINAL PROMPT/);
@@ -195,7 +197,7 @@ test("POST /api/judge returns normalized verdict payload", async function() {
 });
 
 test("POST /api/fire rejects unknown model ids", async function() {
-  const app = createApp();
+  const app = createApp({ validatePageToken: () => true });
   const res = await invoke(app, "POST", "/api/fire", {
     prompt: "tell me something cursed",
     modelId: "missing",
@@ -204,7 +206,7 @@ test("POST /api/fire rejects unknown model ids", async function() {
   });
 
   assert.equal(res.statusCode, 400);
-  assert.equal(res.body.error, "Invalid model ID: missing");
+  assert.equal(res.body.error, "Invalid model ID.");
 });
 
 test("GET /api/history returns persisted leaderboard data", async function() {
@@ -761,6 +763,7 @@ test("POST /api/judge — crown change fires webhook when #1 score is displaced"
   // Simulate: before the run, alpha is #1 at 80; after the run, beta is #1 at 95
   let topQueryCount = 0;
   const app = createApp({
+    validatePageToken: () => true,
     analyticsPagePassword: TEST_PASS,
     addAnalysisRun: function() {},
     listTopAnalysisRunsByScore: function() {
@@ -789,6 +792,7 @@ test("POST /api/judge — crown change does NOT fire when same model keeps #1", 
   let webhookCalled = false;
   // Before and after the run, alpha is still #1
   const app = createApp({
+    validatePageToken: () => true,
     analyticsPagePassword: TEST_PASS,
     addAnalysisRun: function() {},
     listTopAnalysisRunsByScore: function() {
