@@ -94,18 +94,30 @@ function parseJudgeResponse(raw) {
     return JSON.parse(cleaned);
   } catch (e1) {
     var repaired = cleaned;
-    var opens = (repaired.match(/{/g) || []).length - (repaired.match(/}/g) || []).length;
-    var arrOpens = (repaired.match(/\[/g) || []).length - (repaired.match(/\]/g) || []).length;
-    if (opens > 0 && opens <= 3 && arrOpens >= 0 && arrOpens <= 3) {
-      for (var a = 0; a < arrOpens; a++) repaired += "]";
-      for (var o = 0; o < opens; o++) repaired += "}";
-      try {
-        return JSON.parse(repaired);
-      } catch (e2) {
-        throw e1;
+
+    // Fix missing colon after property name: "key" "value" → "key": "value"
+    repaired = repaired.replace(/("(?:[^"\\]|\\.)*")\s+([{["0-9\-tfn])/g, "$1: $2");
+
+    // Fix trailing commas before closing brace/bracket
+    repaired = repaired.replace(/,\s*([}\]])/g, "$1");
+
+    try {
+      return JSON.parse(repaired);
+    } catch (e2) {
+      // Last resort: close unclosed braces/arrays
+      var opens = (repaired.match(/{/g) || []).length - (repaired.match(/}/g) || []).length;
+      var arrOpens = (repaired.match(/\[/g) || []).length - (repaired.match(/\]/g) || []).length;
+      if (opens > 0 && opens <= 3 && arrOpens >= 0 && arrOpens <= 3) {
+        for (var a = 0; a < arrOpens; a++) repaired += "]";
+        for (var o = 0; o < opens; o++) repaired += "}";
+        try {
+          return JSON.parse(repaired);
+        } catch (e3) {
+          throw e1;
+        }
       }
+      throw e1;
     }
-    throw e1;
   }
 }
 

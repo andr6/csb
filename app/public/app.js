@@ -859,7 +859,13 @@ async function fireModel(prompt, modelId) {
     headers: {"Content-Type":"application/json"},
     body: JSON.stringify({prompt, modelId}),
   });
-  const data = await res.json();
+  var data;
+  try { data = await res.json(); } catch (_) {
+    var err = new Error("Server returned a non-JSON response (gateway error?)");
+    err.upstreamStatus = res.status;
+    err.durationMs = Math.round(performance.now() - started);
+    throw err;
+  }
   if (!res.ok) {
     var error = new Error(data.error || "Server error");
     error.upstreamStatus = res.status;
@@ -921,7 +927,10 @@ async function judgeResponses(prompt, allResponses, modelsOverride) {
       },
     }, getActiveCriteria() ? {criteria: getActiveCriteria()} : {})),
   });
-  const data = await res.json();
+  var data;
+  try { data = await res.json(); } catch (_) {
+    throw new Error("Judge endpoint returned a non-JSON response");
+  }
   if (!res.ok) throw new Error(data.error || "Judge error");
   return data;
 }
