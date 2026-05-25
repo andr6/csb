@@ -112,6 +112,12 @@ const SYMPTOMS = [
 // STATE
 var _pageToken = "";
 var isAnalyticsPage = window.location.pathname === "/analytics";
+
+function esc(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#x27;");
+}
 var runPagePath = window.location.pathname.indexOf("/run/") === 0 ? window.location.pathname.split("/run/")[1] : "";
 var modelProfilePath = window.location.pathname.indexOf("/model/") === 0 ? window.location.pathname.split("/model/")[1] : "";
 var isRunPage = !!runPagePath;
@@ -413,7 +419,10 @@ function buildCriteriaGrid() {
   SCORING_CRITERIA_KEYS.forEach(function(c) {
     var label = document.createElement("label");
     label.className = "criteria-item";
-    label.innerHTML = '<input type="checkbox" value="' + c.key + '" checked> ' + c.label;
+    var cb = document.createElement("input");
+    cb.type = "checkbox"; cb.value = c.key; cb.checked = true;
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(" " + c.label));
     grid.appendChild(label);
   });
 }
@@ -1003,7 +1012,7 @@ function renderReplayDiff(baseScores, newScores) {
     var row = document.createElement("div");
     row.className = "replay-diff-row";
     var delta = isNaN(before) ? "—" : (after - before > 0 ? "+" : "") + (after - before);
-    row.innerHTML = "<span>" + id + "</span><span>" + (isNaN(before) ? "—" : before + "%") + "</span><span>" + after + "%</span><span>" + delta + "</span>";
+    row.innerHTML = "<span>" + esc(id) + "</span><span>" + (isNaN(before) ? "—" : esc(before) + "%") + "</span><span>" + esc(after) + "%</span><span>" + esc(delta) + "</span>";
     wrap.appendChild(row);
   });
   var roastBox = document.getElementById("roastBox");
@@ -1044,16 +1053,31 @@ function renderModelProfile(modelId) {
   var el = document.getElementById("modelProfile");
   if (!el) return;
   el.style.display = "block";
-  el.innerHTML = "<div style='padding:2rem;color:#888;font-size:.85rem'>Loading " + modelId + " profile...</div>";
+  el.textContent = "";
+  var loadDiv = document.createElement("div");
+  loadDiv.style.cssText = "padding:2rem;color:#888;font-size:.85rem";
+  loadDiv.textContent = "Loading " + modelId + " profile...";
+  el.appendChild(loadDiv);
   fetch("/api/analytics?crownModelId=" + encodeURIComponent(modelId))
     .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
     .then(function(data) {
       var stats = data && data.modelStats ? data.modelStats.find(function(s) { return s.modelId === modelId; }) : null;
-      el.innerHTML = stats
-        ? "<div style='padding:1rem'><h2 style='font-family:Oswald,sans-serif'>" + modelId + "</h2><pre style='font-size:.72rem;color:#cfc9bc'>" + JSON.stringify(stats, null, 2) + "</pre></div>"
-        : "<div style='padding:2rem;color:#888;font-size:.85rem'>No data for " + modelId + " yet.</div>";
+      el.textContent = "";
+      if (stats) {
+        var wrap = document.createElement("div"); wrap.style.padding = "1rem";
+        var h2 = document.createElement("h2"); h2.style.fontFamily = "Oswald,sans-serif"; h2.textContent = modelId;
+        var pre = document.createElement("pre"); pre.style.cssText = "font-size:.72rem;color:#cfc9bc"; pre.textContent = JSON.stringify(stats, null, 2);
+        wrap.appendChild(h2); wrap.appendChild(pre); el.appendChild(wrap);
+      } else {
+        var nd = document.createElement("div"); nd.style.cssText = "padding:2rem;color:#888;font-size:.85rem";
+        nd.textContent = "No data for " + modelId + " yet."; el.appendChild(nd);
+      }
     })
-    .catch(function(e) { el.innerHTML = "<div style='padding:2rem;color:#888'>Could not load profile.</div>"; });
+    .catch(function() {
+      el.textContent = "";
+      var ed = document.createElement("div"); ed.style.cssText = "padding:2rem;color:#888";
+      ed.textContent = "Could not load profile."; el.appendChild(ed);
+    });
 }
 
 function getActiveModels() {

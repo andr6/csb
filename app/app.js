@@ -32,6 +32,23 @@ const { createRateLimitStore } = require("./lib/rateLimitStore");
 const { notifyWebhook } = require("./lib/webhook");
 const pendingPrompts = require("./lib/repositories/pendingPromptsRepository");
 
+// ── Daily call circuit breaker ────────────────────────────────────────────────
+const DAILY_FIRE_LIMIT  = process.env.MAX_DAILY_FIRE_CALLS  ? Number(process.env.MAX_DAILY_FIRE_CALLS)  : 0;
+const DAILY_JUDGE_LIMIT = process.env.MAX_DAILY_JUDGE_CALLS ? Number(process.env.MAX_DAILY_JUDGE_CALLS) : 0;
+let _daily = { day: "", fire: 0, judge: 0 };
+
+function _dailyReset() {
+  const today = new Date().toISOString().slice(0, 10);
+  if (_daily.day !== today) _daily = { day: today, fire: 0, judge: 0 };
+}
+function dailyLimitExceeded(type) {
+  _dailyReset();
+  if (type === "fire"  && DAILY_FIRE_LIMIT  && _daily.fire  >= DAILY_FIRE_LIMIT)  return true;
+  if (type === "judge" && DAILY_JUDGE_LIMIT && _daily.judge >= DAILY_JUDGE_LIMIT) return true;
+  return false;
+}
+function dailyIncrement(type) { _dailyReset(); _daily[type] = (_daily[type] || 0) + 1; }
+
 // ── Page token — gates /api/fire and /api/judge to visitors who loaded the page ──
 const PAGE_TOKEN_SECRET = process.env.PAGE_TOKEN_SECRET || crypto.randomBytes(32).toString("hex");
 const PAGE_TOKEN_TTL_S = 86400; // 24 hours
@@ -285,6 +302,15 @@ function createApp(overrides) {
     message: { error: "Too many judge requests. Slow down." },
   });
 
+  // Counts only failed auth attempts (skipSuccessfulRequests) — brute-force protection
+  const authFailLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 15,
+    skipSuccessfulRequests: true,
+    store: tryCreateStore("authfail"),
+    message: { error: "Too many failed login attempts. Try again in 15 minutes." },
+  });
+
   app.use(express.json({ limit: "10kb" }));
   app.set("trust proxy", 1);
   app.use(function(req, res, next) {
@@ -323,7 +349,7 @@ function createApp(overrides) {
     message: { error: "Too many requests. Calm down." },
   }));
   app.get("/", sendIndex);
-  app.get("/analytics", analyticsAuth, sendIndex);
+  app.get("/analytics", authFailLimiter, analyticsAuth, sendIndex);
   app.use(express.static(path.join(__dirname, "public")));
 
   app.get("/api/config", function(req, res) {
@@ -390,6 +416,10 @@ function createApp(overrides) {
       return res.status(403).json({ error: "Forbidden." });
     }
 
+    if ((deps.dailyLimitExceeded || dailyLimitExceeded)("fire")) {
+      return res.status(503).json({ error: "Daily request limit reached. Try again tomorrow." });
+    }
+
     const prompt = req.body.prompt;
     const modelId = req.body.modelId;
 
@@ -401,6 +431,7 @@ function createApp(overrides) {
     }
 
     try {
+      (deps.dailyIncrement || dailyIncrement)("fire");
       const response = await callContestant(modelId, getVoice(modelId), prompt);
       res.json({
         modelId: modelId,
@@ -424,6 +455,10 @@ function createApp(overrides) {
     const validateToken = deps.validatePageToken || validatePageToken;
     if (!validateToken(req.headers["x-page-token"])) {
       return res.status(403).json({ error: "Forbidden." });
+    }
+
+    if ((deps.dailyLimitExceeded || dailyLimitExceeded)("judge")) {
+      return res.status(503).json({ error: "Daily request limit reached. Try again tomorrow." });
     }
 
     const prompt = req.body.prompt;
@@ -498,6 +533,7 @@ function createApp(overrides) {
             notifyWebhookFn({ type: "crown_change", newCrown: newCrownModelId, prevCrown: prevCrownModelId, prompt: prompt, score: newTopRun.crownScore });
           }
         }
+        (deps.dailyIncrement || dailyIncrement)("judge");
         res.json(payload);
       } catch (e) {
         addAnalysisRun(buildFailureRun(prompt, responses, meta, "judge_parse", e, raw));
@@ -637,7 +673,7 @@ function createApp(overrides) {
     }
   });
 
-  app.get("/api/health", function(req, res) {
+  app.get("/api/health", analyticsAuth, function(req, res) {
     const keyStatus = {};
     ["openrouter", "anthropic", "openai", "gemini", "litellm"].forEach(function(p) {
       keyStatus[p] = KEYS[p] ? "configured" : "missing";
