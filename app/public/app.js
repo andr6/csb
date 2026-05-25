@@ -885,12 +885,20 @@ async function judgeResponses(prompt, allResponses, modelsOverride) {
       executionModels[model.id] = allResponses[model.id + "__exec"];
     }
   });
+
+  // Only judge models that returned real responses, not error strings
+  var judgableList = activeList.filter(function(model) {
+    var r = allResponses[model.id];
+    return typeof r === "string" && r.trim().length > 0 && !r.startsWith("[Error:");
+  });
+  if (!judgableList.length) throw new Error("All models failed — nothing to judge.");
+
   const res = await fetch("/api/judge", {
     method: "POST",
     headers: {"Content-Type":"application/json"},
     body: JSON.stringify(Object.assign({
       prompt: prompt,
-      responses: activeList.reduce(function(out, model) {
+      responses: judgableList.reduce(function(out, model) {
         out[model.id] = allResponses[model.id];
         return out;
       }, {}),

@@ -396,17 +396,28 @@ function createApp(overrides) {
       return res.status(400).json({ error: "Responses object required." });
     }
 
+    // Strip error responses — models that failed shouldn't be judged
+    const cleanResponses = Object.fromEntries(
+      Object.entries(responses).filter(function(entry) {
+        var v = entry[1];
+        return typeof v === "string" && v.trim().length > 0 && !v.startsWith("[Error:");
+      })
+    );
+    if (Object.keys(cleanResponses).length === 0) {
+      return res.status(400).json({ error: "No successful model responses to judge." });
+    }
+
     const judgeRuns = judgeRunsOverride !== undefined ? Number(judgeRunsOverride) : JUDGE_RUNS;
 
     try {
-      const judgePrompt = buildJudgePrompt(prompt, responses, criteria || undefined);
+      const judgePrompt = buildJudgePrompt(prompt, cleanResponses, criteria || undefined);
       const rawResults = await Promise.all(
         Array.from({ length: judgeRuns }, function() {
           return callJudge(JUDGE_SYSTEM_PROMPT, judgePrompt);
         })
       );
 
-      const responseKeys = Object.keys(responses);
+      const responseKeys = Object.keys(cleanResponses);
       const parsedResults = rawResults.map(function(raw) {
         return normalizeJudgePayload(parseJudgeResponse(raw), responseKeys);
       });
