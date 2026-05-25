@@ -447,9 +447,9 @@ function randomPrompt() {
   document.getElementById("promptInput").value = picked;
   renderRandomStrip();
   updateChar();
-  if (document.getElementById("results").style.display !== "none") {
-    fire();
-  }
+  // Always show fire button so user can submit the new prompt.
+  // Previous results stay visible until fire() replaces them.
+  document.getElementById("fireBtn").style.display = "block";
 }
 
 function showError(msg) {
