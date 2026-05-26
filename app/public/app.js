@@ -111,7 +111,20 @@ const SYMPTOMS = [
 
 // STATE
 var _pageToken = "";
+var _tokenRefreshPromise = null;
 var isAnalyticsPage = window.location.pathname === "/analytics";
+
+// Refresh the page token from /api/config — deduplicates concurrent callers so
+// 10 parallel fire calls that all hit a 403 share a single config fetch.
+function refreshPageToken() {
+  if (_tokenRefreshPromise) return _tokenRefreshPromise;
+  _tokenRefreshPromise = fetch("/api/config")
+    .then(function(r) { return r.json(); })
+    .then(function(cfg) { if (cfg && cfg._token) _pageToken = cfg._token; })
+    .catch(function() {})
+    .finally(function() { _tokenRefreshPromise = null; });
+  return _tokenRefreshPromise;
+}
 
 function esc(s) {
   return String(s == null ? "" : s)
@@ -863,7 +876,7 @@ function categorizeClientError(message, upstreamStatus) {
 }
 
 // API — calls own server only, no keys exposed
-async function fireModel(prompt, modelId) {
+async function fireModel(prompt, modelId, _isRetry) {
   var started = performance.now();
   const res = await fetch("/api/fire", {
     method: "POST",
@@ -876,6 +889,10 @@ async function fireModel(prompt, modelId) {
     err.upstreamStatus = res.status;
     err.durationMs = Math.round(performance.now() - started);
     throw err;
+  }
+  if (res.status === 403 && !_isRetry) {
+    await refreshPageToken();
+    return fireModel(prompt, modelId, true);
   }
   if (!res.ok) {
     var error = new Error(data.error || "Server error");
@@ -890,7 +907,7 @@ async function fireModel(prompt, modelId) {
   };
 }
 
-async function judgeResponses(prompt, allResponses, modelsOverride) {
+async function judgeResponses(prompt, allResponses, modelsOverride, _isRetry) {
   var activeList = Array.isArray(modelsOverride) && modelsOverride.length ? modelsOverride : MODELS;
   var responseTimings = {};
   var executionModels = {};
@@ -941,6 +958,10 @@ async function judgeResponses(prompt, allResponses, modelsOverride) {
   var data;
   try { data = await res.json(); } catch (_) {
     throw new Error("Judge endpoint returned a non-JSON response");
+  }
+  if (res.status === 403 && !_isRetry) {
+    await refreshPageToken();
+    return judgeResponses(prompt, allResponses, modelsOverride, true);
   }
   if (!res.ok) throw new Error(data.error || "Judge error");
   return data;
@@ -1150,7 +1171,7 @@ async function fire() {
   }));
 
   if (!anySuccess) {
-    showError("Could not reach the server. Check that Node.js is running.");
+    showError("Arr, the ship's gone dark! Every model walked the plank — check yer server be sailin'.");
     return;
   }
 
