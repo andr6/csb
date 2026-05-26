@@ -1,8 +1,26 @@
 function parseAllowedOrigins(value) {
-  return String(value || "")
+  var origins = String(value || "")
     .split(",")
     .map(function(origin) { return origin.trim(); })
     .filter(Boolean);
+  // Auto-include the www counterpart so https://example.com also allows
+  // https://www.example.com and vice versa — avoids silent CORS failures.
+  var expanded = [];
+  origins.forEach(function(o) {
+    expanded.push(o);
+    try {
+      var u = new URL(o);
+      var h = u.hostname;
+      var port = u.port ? ":" + u.port : "";
+      if (h === "localhost" || /^\d+\.\d+\.\d+\.\d+$/.test(h)) return;
+      if (h.startsWith("www.")) {
+        expanded.push(u.protocol + "//" + h.slice(4) + port);
+      } else {
+        expanded.push(u.protocol + "//www." + h + port);
+      }
+    } catch (_) {}
+  });
+  return expanded.filter(function(o, i) { return expanded.indexOf(o) === i; });
 }
 
 function parsePositiveNumber(value) {
