@@ -15,8 +15,9 @@ const {
   DAILY_CHALLENGE_PROMPT,
   JUDGE_RUNS,
   WEBHOOK_URL,
+  ALLOWED_ORIGINS,
 } = require("./lib/config");
-const { buildCorsOptions } = require("./lib/cors");
+const { buildCorsOptions, isAllowedOrigin } = require("./lib/cors");
 const modelServices = require("./lib/models");
 const providerServices = require("./lib/providers");
 const { validatePrompt } = require("./lib/validation");
@@ -72,6 +73,22 @@ function validatePageToken(token) {
   const eBuf = Buffer.from(expected, "hex");
   const aBuf = Buffer.from(token.slice(dot + 1), "hex");
   return eBuf.length === aBuf.length && crypto.timingSafeEqual(eBuf, aBuf);
+}
+
+// Rejects requests to mutating endpoints whose Origin/Referer doesn't match the
+// configured ALLOWED_ORIGINS. No-op when ALLOWED_ORIGINS is unset (dev/test).
+function requireKnownOrigin(req, res, next) {
+  if (!ALLOWED_ORIGINS.length) return next();
+  const origin = req.headers["origin"];
+  if (origin !== undefined) {
+    if (!isAllowedOrigin(origin)) return res.status(403).json({ error: "Forbidden." });
+    return next();
+  }
+  const referer = req.headers["referer"] || "";
+  if (referer && !ALLOWED_ORIGINS.some(function(o) { return referer.startsWith(o); })) {
+    return res.status(403).json({ error: "Forbidden." });
+  }
+  next();
 }
 
 function createApp(overrides) {
@@ -302,6 +319,22 @@ function createApp(overrides) {
     message: { error: "Too many judge requests. Slow down." },
   });
 
+  // Tight limit on /api/config — it hands out page tokens; slow down token farming
+  const configLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000,
+    max: 20,
+    store: tryCreateStore("config"),
+    message: { error: "Too many requests." },
+  });
+
+  // Light limit on public read-only endpoints to deter scraping
+  const publicLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    store: tryCreateStore("publicread"),
+    message: { error: "Too many requests. Slow down." },
+  });
+
   // Counts only failed auth attempts (skipSuccessfulRequests) — brute-force protection
   const authFailLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -352,7 +385,7 @@ function createApp(overrides) {
   app.get("/analytics", authFailLimiter, analyticsAuth, sendIndex);
   app.use(express.static(path.join(__dirname, "public")));
 
-  app.get("/api/config", function(req, res) {
+  app.get("/api/config", configLimiter, function(req, res) {
     res.json({
       contestantProvider: CONTESTANT_PROVIDER,
       models: MODEL_MAP,
@@ -362,7 +395,7 @@ function createApp(overrides) {
     });
   });
 
-  app.get("/api/history", function(req, res) {
+  app.get("/api/history", publicLimiter, function(req, res) {
     res.json({
       items: getLeaderboardItems(),
     });
@@ -410,7 +443,7 @@ function createApp(overrides) {
     res.json(getAnalysisAnalytics(buildRunFilters(req.query)));
   });
 
-  app.post("/api/fire", fireLimiter, async function(req, res) {
+  app.post("/api/fire", fireLimiter, requireKnownOrigin, async function(req, res) {
     const validateToken = deps.validatePageToken || validatePageToken;
     if (!validateToken(req.headers["x-page-token"])) {
       return res.status(403).json({ error: "Forbidden." });
@@ -451,7 +484,7 @@ function createApp(overrides) {
     }
   });
 
-  app.post("/api/judge", judgeLimiter, async function(req, res) {
+  app.post("/api/judge", judgeLimiter, requireKnownOrigin, async function(req, res) {
     const validateToken = deps.validatePageToken || validatePageToken;
     if (!validateToken(req.headers["x-page-token"])) {
       return res.status(403).json({ error: "Forbidden." });
@@ -548,7 +581,7 @@ function createApp(overrides) {
   });
 
   // F1 — public shareable run endpoint (no auth)
-  app.get("/api/runs/:id/public", function(req, res) {
+  app.get("/api/runs/:id/public", publicLimiter, function(req, res) {
     const item = getAnalysisRun(req.params.id);
     if (!item) return res.status(404).json({ error: "Run not found." });
     res.json({
@@ -639,7 +672,7 @@ function createApp(overrides) {
     }
   });
 
-  app.get("/api/prompts/community", function(req, res) {
+  app.get("/api/prompts/community", publicLimiter, function(req, res) {
     try {
       res.json({ items: pendingPrompts.getCommunityPrompts() });
     } catch (e) {
