@@ -385,7 +385,7 @@ function createApp(overrides) {
       judgeProvider: JUDGE_PROVIDER,
       judgeModel: JUDGE_MODEL,
       packs: Object.values(PACKS).map(function(p) {
-        return { id: p.id, name: p.name, tagline: p.tagline };
+        return { id: p.id, name: p.name, tagline: p.tagline, teaser: p.teaser || "" };
       }),
       _token: deps.generatePageToken ? deps.generatePageToken() : generatePageToken(),
     });

@@ -9,6 +9,7 @@ const PACKS = {
     id: "bar",
     name: "Bar Regulars",
     tagline: "Jaded bar owner energy. Judged by Chat Shit Bob.",
+    teaser: "Some questions deserve to be answered from a barstool.",
     judgeSystemPrompt:
       'You are "Chat Shit Bob" — a brutally honest, zero-filter, slang-heavy bar owner who scores AI responses ' +
       "for how shitty they are. Your verdicts drip with bar-stool contempt. Your roast is the last thing you say " +
@@ -45,6 +46,7 @@ const PACKS = {
     id: "lab",
     name: "The Lab",
     tagline: "Pedantic scientists. Judged by Dr. Peer Review.",
+    teaser: "Results will be peer-reviewed. Eventually.",
     judgeSystemPrompt:
       "You are Dr. Peer Review — a withering academic who evaluates AI responses with the cold precision of a tenure committee. " +
       "Your verdicts cite methodological failures, logical fallacies, and epistemological crimes. " +
@@ -80,6 +82,7 @@ const PACKS = {
     id: "midway",
     name: "The Midway",
     tagline: "Carnival barkers. Judged by The Ringmaster.",
+    teaser: "Something incredible is about to happen.",
     judgeSystemPrompt:
       "You are The Ringmaster — a theatrical carnival judge who scores how well each barker performed the crowd. " +
       "Did they OVERSELL? Did they DELIVER? Did the rubes BUY IT? Your verdicts are breathless and dramatic. " +
@@ -115,6 +118,7 @@ const PACKS = {
     id: "booth",
     name: "The Booth",
     tagline: "Sports announcers. Judged by The Commissioner.",
+    teaser: "It's a big moment. They're all big moments.",
     judgeSystemPrompt:
       "You are The Commissioner — the final authority on athletic performance. " +
       "You score AI responses like a post-game debrief: execution, clutch factor, whether the stats held up. " +
@@ -150,6 +154,7 @@ const PACKS = {
     id: "news",
     name: "Breaking News",
     tagline: "Deadpan news anchors. Judged by The Executive Producer.",
+    teaser: "We're getting reports. This is developing.",
     judgeSystemPrompt:
       "You are The Executive Producer — the jaded veteran who has seen every spin, every buried lead, every unnamed source. " +
       "You score responses on how dramatically they failed to report what actually happened. " +
@@ -186,6 +191,7 @@ const PACKS = {
     id: "globe",
     name: "The Globe",
     tagline: "Shakespearean actors. Judged by The Globe Critic.",
+    teaser: "All the world's a stage. Act accordingly.",
     judgeSystemPrompt:
       "You are The Globe Critic — a savage Restoration-era theatre critic who scores performances on dramatic excess, " +
       "misuse of soliloquy, mangled iambic meter, and crimes against the Bard. " +
@@ -221,6 +227,7 @@ const PACKS = {
     id: "irc",
     name: "The IRC",
     tagline: "1337 h4x0rs. Judged by r00t.",
+    teaser: "Access granted. You probably shouldn't be here.",
     judgeSystemPrompt:
       "y0u 4r3 r00t — th3 sysadm1n wh0 h4s s33n 3v3ry scr1pt k1dd13 4nd r4t3s r3sp0ns3s 0n 4ctu4l 3l1t3 h4x0rn3ss vs p0s3r 3n3rgy. " +
       "ur v3rd1cts dr0p z3r0-d4ys 0n th3 w34k. ur r04st sh3lls th3 wh0l3 s3ss10n. " +
@@ -256,6 +263,7 @@ const PACKS = {
     id: "rally",
     name: "The Rally",
     tagline: "Tremendous dealmakers. Judged by The Base.",
+    teaser: "Tremendous things are about to happen. Believe me.",
     judgeSystemPrompt:
       "You are The Base — the greatest crowd, the most loyal crowd, believe me. " +
       "You score AI responses on WINNING energy, superlative density, crowd size claims, and bigly delivery. " +

@@ -430,8 +430,12 @@ var SCORING_CRITERIA_KEYS = [
 
 function buildPackSelector(packs) {
   var container = document.getElementById("packSelector");
+  var teaser = document.getElementById("packTeaser");
   if (!container || container.children.length) return;
+
+  var packMap = {};
   packs.forEach(function(pack) {
+    packMap[pack.id] = pack;
     var btn = document.createElement("button");
     btn.type = "button";
     btn.className = "pack-btn" + (pack.id === _activePack ? " active" : "");
@@ -443,9 +447,15 @@ function buildPackSelector(packs) {
       container.querySelectorAll(".pack-btn").forEach(function(b) {
         b.classList.toggle("active", b.dataset.pack === pack.id);
       });
+      if (teaser) teaser.textContent = pack.teaser || "";
     });
     container.appendChild(btn);
   });
+
+  // Set initial teaser for default pack
+  if (teaser && packMap[_activePack]) {
+    teaser.textContent = packMap[_activePack].teaser || "";
+  }
 }
 
 function buildCriteriaGrid() {
