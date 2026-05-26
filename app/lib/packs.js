@@ -7,7 +7,7 @@ const PACKS = {
   // ── Bar Regulars ────────────────────────────────────────────────────────────
   bar: {
     id: "bar",
-    name: "Bar Regulars",
+    name: "Last Call",
     tagline: "Jaded bar owner energy. Judged by Chat Shit Bob.",
     teaser: "Some questions deserve to be answered from a barstool.",
     judgeSystemPrompt:
