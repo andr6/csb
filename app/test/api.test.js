@@ -9,6 +9,7 @@ process.env.MODEL_ALPHA = "openai/gpt-4o-mini";
 process.env.MODEL_BETA = "anthropic/claude-sonnet-4-5";
 
 const { createApp } = require("../app");
+const { getPack } = require("../lib/packs");
 
 const TEST_PASS = "test-pass";
 const TEST_AUTH = { authorization: "Basic " + Buffer.from("analytics:" + TEST_PASS).toString("base64") };
@@ -123,6 +124,7 @@ test("POST /api/judge returns normalized verdict payload", async function() {
   var savedRun = null;
   const app = createApp({
     validatePageToken: () => true,
+    judgeSystemPrompt: getPack("bar").judgeSystemPrompt,
     callJudge: async function(system, prompt) {
       assert.match(system, /Chat Shit Bob/);
       assert.match(prompt, /ORIGINAL PROMPT/);

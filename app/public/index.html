@@ -406,6 +406,11 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
 .versus-pickers{display:flex;gap:.75rem;margin:1rem 0}
 .versus-select{flex:1;background:#0d0d0d;border:1px solid var(--border2);color:var(--text);padding:.8rem 1rem;font-family:'DM Mono',monospace}
 /* F9 CUSTOM criteria picker */
+.pack-selector-wrap{margin:1rem 0 .5rem;padding:.85rem 1rem;border:1px solid var(--border2);background:rgba(15,15,15,.7)}
+.pack-selector{display:flex;gap:.5rem;flex-wrap:wrap}
+.pack-btn{font-family:'DM Mono',monospace;font-size:.72rem;padding:.35rem .85rem;border:1px solid var(--border2);background:transparent;color:#888;cursor:pointer;letter-spacing:.06em;transition:all .15s}
+.pack-btn:hover{border-color:var(--gold);color:#cfc9bc}
+.pack-btn.active{border-color:var(--gold);color:var(--gold);background:rgba(212,175,55,.08)}
 .criteria-picker{margin:1rem 0;padding:.85rem 1rem;border:1px solid var(--border2);background:rgba(15,15,15,.7)}
 .criteria-picker-label{font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.12em;text-transform:uppercase;color:#888;margin-bottom:.6rem}
 .criteria-grid{display:grid;grid-template-columns:1fr 1fr;gap:.35rem .75rem}
@@ -476,6 +481,12 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
   <div class="versus-pickers" id="versusPickers" style="display:none">
     <select class="versus-select" id="versusModelA"></select>
     <select class="versus-select" id="versusModelB"></select>
+  </div>
+
+  <!-- PACK SELECTOR -->
+  <div class="pack-selector-wrap" id="packSelectorWrap">
+    <div class="criteria-picker-label">// character pack</div>
+    <div class="pack-selector" id="packSelector"></div>
   </div>
 
   <!-- F9 CUSTOM CRITERIA PICKER -->

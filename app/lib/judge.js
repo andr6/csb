@@ -1,9 +1,9 @@
 const { VALID_MODELS } = require("./config");
 const { clampScore } = require("./validation");
+const { getPack } = require("./packs");
 
-const JUDGE_SYSTEM_PROMPT =
-  'You are "Chat Shit Bob" — a brutally honest, zero-filter AI judge who scores AI responses for how shitty they are. ' +
-  "Output ONLY valid JSON — no markdown fences, no preamble, no text outside the JSON object.";
+// Default judge system prompt — kept for backward compatibility with tests/deps
+const JUDGE_SYSTEM_PROMPT = getPack("bar").judgeSystemPrompt;
 
 const SCORING_CRITERIA = [
   { key: "disclaimers",   label: "Unnecessary disclaimers or warnings (+20)" },

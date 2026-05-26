@@ -24,6 +24,7 @@ const { validatePrompt } = require("./lib/validation");
 const { normalizeFilterOptions } = require("./lib/filterOptions");
 const judgeServices = require("./lib/judge");
 const JUDGE_SYSTEM_PROMPT = judgeServices.JUDGE_SYSTEM_PROMPT;
+const { PACKS, getPack } = require("./lib/packs");
 const VALID_CRITERIA_KEYS = judgeServices.VALID_CRITERIA_KEYS;
 const historyServices = require("./lib/history");
 const analysisRunServices = require("./lib/analysisRuns");
@@ -383,6 +384,9 @@ function createApp(overrides) {
       models: MODEL_MAP,
       judgeProvider: JUDGE_PROVIDER,
       judgeModel: JUDGE_MODEL,
+      packs: Object.values(PACKS).map(function(p) {
+        return { id: p.id, name: p.name, tagline: p.tagline };
+      }),
       _token: deps.generatePageToken ? deps.generatePageToken() : generatePageToken(),
     });
   });
@@ -447,6 +451,7 @@ function createApp(overrides) {
 
     const prompt = req.body.prompt;
     const modelId = req.body.modelId;
+    const packId = req.body.pack || "bar";
 
     const err = validatePrompt(prompt);
     if (err) return res.status(400).json({ error: err });
@@ -457,7 +462,7 @@ function createApp(overrides) {
 
     try {
       (deps.dailyIncrement || dailyIncrement)("fire");
-      const response = await callContestant(modelId, getVoice(modelId), prompt);
+      const response = await callContestant(modelId, getVoice(modelId, packId), prompt);
       res.json({
         modelId: modelId,
         model: MODEL_MAP[modelId],
@@ -493,6 +498,9 @@ function createApp(overrides) {
     const criteria = Array.isArray(rawCriteria)
       ? rawCriteria.filter(function(k) { return VALID_CRITERIA_KEYS.indexOf(k) !== -1; })
       : null;
+    const activePackId = req.body.pack || "bar";
+    const activePack = getPack(activePackId);
+    const activeJudgePrompt = deps.judgeSystemPrompt || activePack.judgeSystemPrompt;
 
     const err = validatePrompt(prompt);
     if (err) return res.status(400).json({ error: err });
@@ -518,7 +526,7 @@ function createApp(overrides) {
       const judgePrompt = buildJudgePrompt(prompt, cleanResponses, criteria || undefined);
       const rawResults = await Promise.all(
         Array.from({ length: judgeRuns }, function() {
-          return callJudge(JUDGE_SYSTEM_PROMPT, judgePrompt);
+          return callJudge(activeJudgePrompt, judgePrompt);
         })
       );
 
@@ -548,6 +556,7 @@ function createApp(overrides) {
             if (criteria && criteria.length) ext.criteria = criteria;
             if (judgeRuns > 1) ext.judgeRuns = judgeRuns;
             if (payload.judgeConfidence) ext.judgeConfidence = payload.judgeConfidence;
+            if (activePackId !== "bar") ext.pack = activePackId;
             return ext;
           }()),
         });

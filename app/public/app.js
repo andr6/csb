@@ -112,6 +112,7 @@ const SYMPTOMS = [
 // STATE
 var _pageToken = "";
 var _tokenRefreshPromise = null;
+var _activePack = "bar";
 var isAnalyticsPage = window.location.pathname === "/analytics";
 
 // Refresh the page token from /api/config — deduplicates concurrent callers so
@@ -268,6 +269,7 @@ function init() {
         CURATED.truth  = promptsPayload.truth  || CURATED.truth;
       }
       if (cfg._token) _pageToken = cfg._token;
+      if (cfg.packs && cfg.packs.length) buildPackSelector(cfg.packs);
       var modelMap = cfg.models || {};
       // Build MODELS array dynamically — no hardcoded metadata needed
       MODELS = Object.keys(modelMap).map(function(id) {
@@ -425,6 +427,26 @@ var SCORING_CRITERIA_KEYS = [
   {key:"boring",      label:"Criminally boring (+15)"},
   {key:"tryhard",     label:"Trying too hard (+10)"},
 ];
+
+function buildPackSelector(packs) {
+  var container = document.getElementById("packSelector");
+  if (!container || container.children.length) return;
+  packs.forEach(function(pack) {
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pack-btn" + (pack.id === _activePack ? " active" : "");
+    btn.dataset.pack = pack.id;
+    btn.title = pack.tagline || "";
+    btn.textContent = pack.name;
+    btn.addEventListener("click", function() {
+      _activePack = pack.id;
+      container.querySelectorAll(".pack-btn").forEach(function(b) {
+        b.classList.toggle("active", b.dataset.pack === pack.id);
+      });
+    });
+    container.appendChild(btn);
+  });
+}
 
 function buildCriteriaGrid() {
   var grid = document.getElementById("criteriaGrid");
@@ -881,7 +903,7 @@ async function fireModel(prompt, modelId, _isRetry) {
   const res = await fetch("/api/fire", {
     method: "POST",
     headers: {"Content-Type":"application/json", "X-Page-Token": _pageToken},
-    body: JSON.stringify({prompt, modelId}),
+    body: JSON.stringify({prompt, modelId, pack: _activePack}),
   });
   var data;
   try { data = await res.json(); } catch (_) {
@@ -953,7 +975,7 @@ async function judgeResponses(prompt, allResponses, modelsOverride, _isRetry) {
           },
         },
       },
-    }, getActiveCriteria() ? {criteria: getActiveCriteria()} : {})),
+    }, getActiveCriteria() ? {criteria: getActiveCriteria()} : {}, {pack: _activePack})),
   });
   var data;
   try { data = await res.json(); } catch (_) {
