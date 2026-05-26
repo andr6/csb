@@ -307,7 +307,6 @@ function createApp(overrides) {
     windowMs: 60 * 1000,
     max: 10,
     store: tryCreateStore("fire"),
-    validate: { singleCount: false },
     message: { error: "Too many requests. Slow down." },
   });
 
@@ -315,7 +314,6 @@ function createApp(overrides) {
     windowMs: 60 * 1000,
     max: 6,
     store: tryCreateStore("judge"),
-    validate: { singleCount: false },
     message: { error: "Too many judge requests. Slow down." },
   });
 
@@ -375,12 +373,6 @@ function createApp(overrides) {
     next();
   });
   app.use(cors(buildCorsOptions()));
-  app.use("/api/", rateLimit({
-    windowMs: 60 * 1000,
-    max: 30,
-    store: tryCreateStore("api"),
-    message: { error: "Too many requests. Calm down." },
-  }));
   app.get("/", sendIndex);
   app.get("/analytics", authFailLimiter, analyticsAuth, sendIndex);
   app.use(express.static(path.join(__dirname, "public")));
