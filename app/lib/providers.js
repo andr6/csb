@@ -6,6 +6,7 @@ const {
   LITELLM_BASE,
   CONTESTANT_PROVIDER,
   MODEL_MAP,
+  MODEL_TIMEOUTS,
   CONTESTANT_TIMEOUT_MS,
   JUDGE_TIMEOUT_MS,
 } = require("./config");
@@ -148,7 +149,8 @@ function dispatch(provider, model, system, userPrompt, keys, timeoutMs) {
 
 function callContestant(modelId, system, userPrompt) {
   const model = MODEL_MAP[modelId];
-  return dispatch(CONTESTANT_PROVIDER, model, system, userPrompt, KEYS, CONTESTANT_TIMEOUT_MS);
+  const timeoutMs = MODEL_TIMEOUTS[modelId] || CONTESTANT_TIMEOUT_MS;
+  return dispatch(CONTESTANT_PROVIDER, model, system, userPrompt, KEYS, timeoutMs);
 }
 
 function callJudge(system, userPrompt) {

@@ -100,6 +100,17 @@ ACTIVE_MODELS.forEach(function(id) {
 });
 
 const VALID_MODELS = Object.keys(MODEL_MAP);
+// Per-model contestant timeout overrides — format: MODEL_TIMEOUT_NEMOTRON=30000
+const MODEL_TIMEOUTS = {};
+Object.keys(process.env).forEach(function(key) {
+  var m = key.match(/^MODEL_TIMEOUT_([A-Z0-9_]+)$/);
+  if (m) {
+    var id = m[1].toLowerCase();
+    var ms = Number(process.env[key]);
+    if (Number.isFinite(ms) && ms > 0) MODEL_TIMEOUTS[id] = ms;
+  }
+});
+
 const MODEL_PRICING_USD = parseModelPricing(process.env);
 const JUDGE_PRICE_USD = parsePositiveNumber(process.env.JUDGE_PRICE_USD);
 const ANALYTICS_BUDGETS = {
@@ -138,6 +149,7 @@ module.exports = {
   MODEL_CATALOGUE: MODEL_CATALOGUE,
   MODEL_MAP: MODEL_MAP,
   VALID_MODELS: VALID_MODELS,
+  MODEL_TIMEOUTS: MODEL_TIMEOUTS,
   MODEL_PRICING_USD: MODEL_PRICING_USD,
   JUDGE_PRICE_USD: JUDGE_PRICE_USD,
   ANALYTICS_BUDGETS: ANALYTICS_BUDGETS,

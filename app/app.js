@@ -342,7 +342,7 @@ function createApp(overrides) {
     message: { error: "Too many failed login attempts. Try again in 15 minutes." },
   });
 
-  app.use(express.json({ limit: "10kb" }));
+  app.use(express.json({ limit: "100kb" }));
   app.set("trust proxy", 1);
   app.use(function(req, res, next) {
     res.setHeader(
