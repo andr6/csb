@@ -491,8 +491,8 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
       <button class="btn-random" onclick="randomPrompt()">🎲 RANDOM</button>
     </div>
     <div class="input-box">
-      <textarea class="prompt-ta" id="promptInput" placeholder="type something cursed..." maxlength="500" rows="3" oninput="handleTyping()" onkeydown="_userIsTyping=true" onfocus="_userIsTyping=false"></textarea>
-      <div class="input-footer"><span class="char-c" id="charCount">0/500</span></div>
+      <textarea class="prompt-ta" id="promptInput" placeholder="type something cursed..." maxlength="1500" rows="3" oninput="handleTyping()" onkeydown="_userIsTyping=true" onfocus="_userIsTyping=false"></textarea>
+      <div class="input-footer"><span class="char-c" id="charCount">0/1500</span></div>
     </div>
     <div class="error-banner" id="errorBanner"></div>
     <button class="btn-fire" id="fireBtn" onclick="fire()" disabled>💩 FIRE AT ALL LLMS</button>

@@ -450,7 +450,7 @@ function getActiveCriteria() {
 
 function updateChar() {
   var v = document.getElementById("promptInput").value;
-  document.getElementById("charCount").textContent = v.length+"/500";
+  document.getElementById("charCount").textContent = v.length+"/1500";
   document.getElementById("fireBtn").disabled = !v.trim();
   document.getElementById("errorBanner").style.display = "none";
 }
