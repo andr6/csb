@@ -333,7 +333,8 @@ function init() {
     isAnalyticsPage ? fetch("/api/runs?limit=10").then(function(r) { return r.json(); }).catch(function() { return emptyRunsPayload; }) : Promise.resolve(emptyRunsPayload),
     isAnalyticsPage ? fetch("/api/failures/summary").then(function(r) { return r.json(); }).catch(function() { return emptyFailurePayload; }) : Promise.resolve(emptyFailurePayload),
     isAnalyticsPage ? fetch("/api/analytics").then(function(r) { return r.json(); }).catch(function() { return emptyAnalyticsPayload; }) : Promise.resolve(emptyAnalyticsPayload),
-    fetch("/prompts.json").then(function(r) { return r.json(); }).catch(function() { return null; }),
+    fetch("/pack-prompts.json").then(function(r) { return r.json(); }).catch(function() { return null; }),
+    fetch("/mode-prompts.json").then(function(r) { return r.json(); }).catch(function() { return null; }),
   ];
 
   Promise.all(requests)
@@ -343,23 +344,26 @@ function init() {
       var runsPayload = results[2];
       var failurePayload = results[3];
       var analyticsPayload = results[4];
-      var promptsPayload = results[5];
-      if (promptsPayload && promptsPayload.rage) {
-        CURATED.rage   = promptsPayload.rage;
-        CURATED.absurd = promptsPayload.absurd || CURATED.absurd;
-        CURATED.truth  = promptsPayload.truth  || CURATED.truth;
-        CURATED.versus = promptsPayload.versus || CURATED.versus;
-        CURATED.tournament = promptsPayload.tournament || CURATED.tournament;
-        CURATED.custom = promptsPayload.custom || CURATED.custom;
-        CURATED.bar    = promptsPayload.bar    || CURATED.bar;
-        CURATED.lab    = promptsPayload.lab    || CURATED.lab;
-        CURATED.midway = promptsPayload.midway || CURATED.midway;
-        CURATED.booth  = promptsPayload.booth  || CURATED.booth;
-        CURATED.news   = promptsPayload.news   || CURATED.news;
-        CURATED.globe  = promptsPayload.globe  || CURATED.globe;
-        CURATED.irc    = promptsPayload.irc    || CURATED.irc;
-        CURATED.redteam= promptsPayload.redteam|| CURATED.redteam;
-        CURATED.rally  = promptsPayload.rally  || CURATED.rally;
+      var packPayload = results[5];
+      var modePayload = results[6];
+      if (packPayload) {
+        if (packPayload.rage)     CURATED.rage    = packPayload.rage;
+        if (packPayload.absurd)   CURATED.absurd  = packPayload.absurd || CURATED.absurd;
+        if (packPayload.truth)    CURATED.truth   = packPayload.truth  || CURATED.truth;
+        if (packPayload.bar)      CURATED.bar     = packPayload.bar    || CURATED.bar;
+        if (packPayload.lab)      CURATED.lab     = packPayload.lab    || CURATED.lab;
+        if (packPayload.midway)   CURATED.midway  = packPayload.midway || CURATED.midway;
+        if (packPayload.booth)    CURATED.booth   = packPayload.booth  || CURATED.booth;
+        if (packPayload.news)     CURATED.news    = packPayload.news   || CURATED.news;
+        if (packPayload.globe)    CURATED.globe   = packPayload.globe  || CURATED.globe;
+        if (packPayload.irc)      CURATED.irc     = packPayload.irc    || CURATED.irc;
+        if (packPayload.redteam)  CURATED.redteam = packPayload.redteam|| CURATED.redteam;
+        if (packPayload.rally)    CURATED.rally   = packPayload.rally  || CURATED.rally;
+      }
+      if (modePayload) {
+        if (modePayload.versus)     CURATED.versus     = modePayload.versus     || CURATED.versus;
+        if (modePayload.tournament) CURATED.tournament = modePayload.tournament || CURATED.tournament;
+        if (modePayload.custom)     CURATED.custom     = modePayload.custom     || CURATED.custom;
       }
       if (cfg._token) _pageToken = cfg._token;
       if (cfg.packs && cfg.packs.length) buildPackSelector(cfg.packs);
