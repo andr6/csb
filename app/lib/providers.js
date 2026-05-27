@@ -10,7 +10,7 @@ const {
   CONTESTANT_TIMEOUT_MS,
   JUDGE_TIMEOUT_MS,
 } = require("./config");
-const { fetchJson } = require("./http");
+const { fetchJson, withTimeout } = require("./http");
 
 function requireApiKey(provider, key) {
   if (!key) {
@@ -147,18 +147,69 @@ function dispatch(provider, model, system, userPrompt, keys, timeoutMs) {
   }
 }
 
+async function checkProviderHealth(provider, key) {
+  var urls = {
+    openrouter: "https://openrouter.ai/api/v1/models",
+    anthropic: "https://api.anthropic.com/v1/models",
+    openai: "https://api.openai.com/v1/models",
+    gemini: "https://generativelanguage.googleapis.com/v1beta/models",
+    litellm: LITELLM_BASE + "/models",
+  };
+  var url = urls[provider];
+  if (!url) return "unknown";
+  if (!key) return "missing_key";
+
+  var timer = withTimeout(5000);
+  try {
+    await fetch(url, { method: "HEAD", signal: timer.signal });
+    return "reachable";
+  } catch (e) {
+    if (e.name === "AbortError") return "timeout";
+    return "unreachable";
+  } finally {
+    timer.cleanup();
+  }
+}
+
+async function withRetry(fn, opts) {
+  var maxRetries = opts && opts.maxRetries !== undefined ? opts.maxRetries : 2;
+  var baseDelayMs = opts && opts.baseDelayMs !== undefined ? opts.baseDelayMs : 500;
+  var lastError;
+  for (var attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastError = e;
+      var status = e && e.upstreamStatus ? e.upstreamStatus : 0;
+      // Do not retry on 4xx client errors (except 429 rate-limit and 408 timeout)
+      if (status >= 400 && status < 500 && status !== 429 && status !== 408) throw e;
+      if (attempt < maxRetries) {
+        var delay = baseDelayMs * Math.pow(2, attempt);
+        await new Promise(function(resolve) { setTimeout(resolve, delay); });
+      }
+    }
+  }
+  throw lastError;
+}
+
 function callContestant(modelId, system, userPrompt) {
   const model = MODEL_MAP[modelId];
   const timeoutMs = MODEL_TIMEOUTS[modelId] || CONTESTANT_TIMEOUT_MS;
-  return dispatch(CONTESTANT_PROVIDER, model, system, userPrompt, KEYS, timeoutMs);
+  return withRetry(function() {
+    return dispatch(CONTESTANT_PROVIDER, model, system, userPrompt, KEYS, timeoutMs);
+  }, { maxRetries: 2 });
 }
 
 function callJudge(system, userPrompt) {
-  return dispatch(JUDGE_PROVIDER, JUDGE_MODEL, system, userPrompt, JUDGE_KEYS, JUDGE_TIMEOUT_MS);
+  return withRetry(function() {
+    return dispatch(JUDGE_PROVIDER, JUDGE_MODEL, system, userPrompt, JUDGE_KEYS, JUDGE_TIMEOUT_MS);
+  }, { maxRetries: 2 });
 }
 
 module.exports = {
   callContestant: callContestant,
   callJudge: callJudge,
   dispatch: dispatch,
+  withRetry: withRetry,
+  checkProviderHealth: checkProviderHealth,
 };

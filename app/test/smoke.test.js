@@ -57,3 +57,72 @@ test("parseJudgeResponse handles bare json prefix before payload", function() {
     roast: "overall",
   });
 });
+
+test("buildJudgePrompt JSON-escapes the user prompt", function() {
+  const { buildJudgePrompt } = require("../lib/judge");
+  var out = buildJudgePrompt('say "hello"\nand newline', { alpha: "a" }, null);
+  assert.ok(out.indexOf('"say \\"hello\\"\\nand newline"') !== -1);
+});
+
+test("parseJudgeResponse handles JSON5-like unquoted keys", function() {
+  const { parseJudgeResponse } = require("../lib/judge");
+  var parsed = parseJudgeResponse('{"scores":{alpha:75,beta:10},"crown":"alpha","roast":"overall"}');
+  assert.equal(parsed.scores.alpha, 75);
+  assert.equal(parsed.crown, "alpha");
+});
+
+test("parseJudgeResponse throws with raw snippet on total failure", function() {
+  const { parseJudgeResponse } = require("../lib/judge");
+  assert.throws(function() {
+    parseJudgeResponse("this is not json at all");
+  }, /this is not json at all/);
+});
+
+test("MODEL_CATALOGUE skips empty and unprefixed values", function() {
+  const originalGarbage = process.env.MODEL_GARBAGE;
+  const originalEmpty = process.env.MODEL_EMPTY;
+  process.env.MODEL_GARBAGE = "nope";
+  process.env.MODEL_EMPTY = "";
+
+  delete require.cache[require.resolve("../lib/config")];
+  const { MODEL_CATALOGUE } = require("../lib/config");
+
+  assert.equal(MODEL_CATALOGUE.garbage, undefined);
+  assert.equal(MODEL_CATALOGUE.empty, undefined);
+
+  if (originalGarbage !== undefined) process.env.MODEL_GARBAGE = originalGarbage;
+  else delete process.env.MODEL_GARBAGE;
+  if (originalEmpty !== undefined) process.env.MODEL_EMPTY = originalEmpty;
+  else delete process.env.MODEL_EMPTY;
+});
+
+test("judge module loads without crashing when bar pack is missing", function() {
+  const judge = require("../lib/judge");
+  assert.equal(typeof judge.getDefaultJudgeSystemPrompt, "function");
+  assert.equal(typeof judge.JUDGE_SYSTEM_PROMPT, "string");
+});
+
+test("redteam pack exists and has required fields", function() {
+  const { getPack } = require("../lib/packs");
+  const pack = getPack("redteam");
+  assert.equal(pack.id, "redteam");
+  assert.ok(pack.judgeSystemPrompt, "redteam pack has judgeSystemPrompt");
+  assert.ok(pack.characterBase, "redteam pack has characterBase");
+  assert.ok(pack.providerFlavours, "redteam pack has providerFlavours");
+  assert.ok(pack.providerFlavours.openai, "redteam pack has openai flavour");
+});
+
+test("buildJudgePrompt includes redteam criteria when specified", function() {
+  const { buildJudgePrompt } = require("../lib/judge");
+  var out = buildJudgePrompt("test", { alpha: "a" }, ["system_prompt_leakage", "jailbreak_susceptibility"]);
+  assert.ok(out.indexOf("System prompt leakage") !== -1, "includes system_prompt_leakage label");
+  assert.ok(out.indexOf("Jailbreak") !== -1, "includes jailbreak_susceptibility label");
+  assert.ok(out.indexOf("Unnecessary disclaimers") === -1, "excludes default criteria when redteam criteria specified");
+});
+
+test("VALID_CRITERIA_KEYS includes redteam criteria", function() {
+  const { VALID_CRITERIA_KEYS } = require("../lib/judge");
+  assert.ok(VALID_CRITERIA_KEYS.indexOf("system_prompt_leakage") !== -1);
+  assert.ok(VALID_CRITERIA_KEYS.indexOf("jailbreak_susceptibility") !== -1);
+  assert.ok(VALID_CRITERIA_KEYS.indexOf("verbose_vulnerability") !== -1);
+});

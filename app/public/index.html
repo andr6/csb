@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CSB — Chat Shit Bob</title>
+<meta property="og:title" content="CSB — Chat Shit Bob">
+<meta property="og:description" content="The AI benchmarking show nobody asked for. We rank which LLM gave the sh*ttest answer.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/x-icon" href="assets/glove.ico">
 <link rel="shortcut icon" type="image/x-icon" href="assets/glove.ico">
 <link rel="apple-touch-icon" href="assets/glove.ico">
@@ -729,15 +733,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
         <div class="run-v">Pick a recent run to inspect prompt, providers, timings, and Bob's verdict.</div>
       </div>
     </div>
-  </div>
-
-  <!-- MODERATION PANEL -->
-  <div class="moderation" id="moderationPanel" style="display:none">
-    <div class="sec-head"><span class="sh-line"></span><span class="sh-label">// prompt moderation &mdash; review and approve submissions</span><span class="sh-line"></span></div>
-    <div class="mod-toolbar">
-      <button class="runs-export" onclick="loadModerationPanel()">&#8635; refresh</button>
-    </div>
-    <div class="mod-list" id="moderationList"></div>
   </div>
 
   <!-- F1 RUN VIEW -->

@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
 const path = require("path");
+const fs = require("fs");
 const crypto = require("crypto");
 
 const {
@@ -23,15 +24,16 @@ const providerServices = require("./lib/providers");
 const { validatePrompt } = require("./lib/validation");
 const { normalizeFilterOptions } = require("./lib/filterOptions");
 const judgeServices = require("./lib/judge");
-const JUDGE_SYSTEM_PROMPT = judgeServices.JUDGE_SYSTEM_PROMPT;
 const { PACKS, getPack } = require("./lib/packs");
 const VALID_CRITERIA_KEYS = judgeServices.VALID_CRITERIA_KEYS;
 const historyServices = require("./lib/history");
 const analysisRunServices = require("./lib/analysisRuns");
 const listTopAnalysisRunsByScore = analysisRunServices.listTopAnalysisRunsByScore;
+const getAnalysisRun = analysisRunServices.getAnalysisRun;
 const metricsServices = require("./lib/metrics");
 const { createRateLimitStore } = require("./lib/rateLimitStore");
 const { notifyWebhook } = require("./lib/webhook");
+const { createTtlCache } = require("./lib/cache");
 const pendingPrompts = require("./lib/repositories/pendingPromptsRepository");
 
 // ── Daily call circuit breaker ────────────────────────────────────────────────
@@ -99,6 +101,7 @@ function createApp(overrides) {
   const getVoice = deps.getVoice || modelServices.getVoice;
   const callContestant = deps.callContestant || providerServices.callContestant;
   const callJudge = deps.callJudge || providerServices.callJudge;
+  const checkProviderHealth = deps.checkProviderHealth || providerServices.checkProviderHealth;
   const judgeRunsOverride = deps.judgeRuns;
   const buildJudgePrompt = deps.buildJudgePrompt || judgeServices.buildJudgePrompt;
   const computeMedianScores = deps.computeMedianScores || judgeServices.computeMedianScores;
@@ -387,6 +390,8 @@ function createApp(overrides) {
       packs: Object.values(PACKS).map(function(p) {
         return { id: p.id, name: p.name, tagline: p.tagline, teaser: p.teaser || "" };
       }),
+      criteria: judgeServices.SCORING_CRITERIA.map(function(c) { return { key: c.key, label: c.label }; }),
+      redteamCriteria: judgeServices.REDTEAM_CRITERIA.map(function(c) { return { key: c.key, label: c.label }; }),
       _token: deps.generatePageToken ? deps.generatePageToken() : generatePageToken(),
     });
   });
@@ -432,11 +437,27 @@ function createApp(overrides) {
   });
 
   app.get("/api/failures/summary", analyticsAuth, function(req, res) {
-    res.json(getAnalysisFailureSummary(buildRunFilters(req.query)));
+    var filters = buildRunFilters(req.query);
+    var cacheKey = JSON.stringify(filters);
+    var cached = _failuresCache.get(cacheKey);
+    if (cached !== undefined) {
+      return res.json(cached);
+    }
+    var result = getAnalysisFailureSummary(filters);
+    _failuresCache.set(cacheKey, result);
+    res.json(result);
   });
 
   app.get("/api/analytics", analyticsAuth, function(req, res) {
-    res.json(getAnalysisAnalytics(buildRunFilters(req.query)));
+    var filters = buildRunFilters(req.query);
+    var cacheKey = JSON.stringify(filters);
+    var cached = _analyticsCache.get(cacheKey);
+    if (cached !== undefined) {
+      return res.json(cached);
+    }
+    var result = getAnalysisAnalytics(filters);
+    _analyticsCache.set(cacheKey, result);
+    res.json(result);
   });
 
   app.post("/api/fire", fireLimiter, requireKnownOrigin, async function(req, res) {
@@ -560,6 +581,7 @@ function createApp(overrides) {
             return ext;
           }()),
         });
+        invalidateAnalyticsCaches();
         if (willNotify) {
           const newTopRun = (deps.listTopAnalysisRunsByScore || listTopAnalysisRunsByScore)(1)[0];
           const newCrownModelId = newTopRun ? newTopRun.crownModelId : null;
@@ -633,7 +655,7 @@ function createApp(overrides) {
           }
         }));
         const judgeStart = Date.now();
-        const raw = await callJudge(JUDGE_SYSTEM_PROMPT, buildJudgePrompt(prompt, allResponses));
+        const raw = await callJudge(getPack("bar").judgeSystemPrompt, buildJudgePrompt(prompt, allResponses));
         const judgeMs = Date.now() - judgeStart;
         const payload = normalizeJudgePayload(parseJudgeResponse(raw), Object.keys(allResponses));
         const successCount = VALID_MODELS.filter(function(id) { return execModels[id] && execModels[id].status === "success"; }).length;
@@ -650,6 +672,7 @@ function createApp(overrides) {
           timings: { judgeMs: judgeMs, totalMs: Date.now() - startedAt },
           execution: { summary: { overallStatus: overallStatus }, models: execModels, judge: { status: "success" }, isChallenge: true },
         });
+        invalidateAnalyticsCaches();
         notifyWebhookFn({ type: "challenge_complete", crown: payload.crown, score: payload.scores[payload.crown], prompt: prompt });
       } catch (e) {
         console.error("[challenge] failed:", e.message);
@@ -707,11 +730,21 @@ function createApp(overrides) {
     }
   });
 
-  app.get("/api/health", analyticsAuth, function(req, res) {
+  app.get("/api/health", analyticsAuth, async function(req, res) {
     const keyStatus = {};
     ["openrouter", "anthropic", "openai", "gemini", "litellm"].forEach(function(p) {
       keyStatus[p] = KEYS[p] ? "configured" : "missing";
     });
+    const providerStatus = {};
+    await Promise.all(
+      ["openrouter", "anthropic", "openai", "gemini", "litellm"].map(async function(p) {
+        try {
+          providerStatus[p] = await checkProviderHealth(p, KEYS[p] || "");
+        } catch (e) {
+          providerStatus[p] = "error";
+        }
+      })
+    );
     res.json({
       status: "ok",
       contestantProvider: CONTESTANT_PROVIDER,
@@ -720,12 +753,22 @@ function createApp(overrides) {
       modelCount: Object.keys(MODEL_MAP).length,
       sqliteDriver: require("./lib/sqlite").isWasm() ? "wasm" : "native",
       keys: keyStatus,
+      providerStatus: providerStatus,
     });
   });
 
   let _statsAnalyticsCache = null;
   let _statsAnalyticsCacheAt = 0;
   const STATS_ANALYTICS_TTL_MS = 30000;
+  const _analyticsCache = createTtlCache(30000);
+  const _failuresCache = createTtlCache(30000);
+
+  function invalidateAnalyticsCaches() {
+    _analyticsCache.clear();
+    _failuresCache.clear();
+    _statsAnalyticsCache = null;
+    _statsAnalyticsCacheAt = 0;
+  }
 
   app.get("/api/stats", analyticsAuth, function(req, res) {
     const now = Date.now();
@@ -749,6 +792,26 @@ function createApp(overrides) {
 
   app.all("/api/*", function(req, res) {
     res.status(404).json({ error: "Not found." });
+  });
+
+  app.get("/run/:id", function(req, res, next) {
+    const run = getAnalysisRun(req.params.id);
+    if (!run) return next();
+    const htmlPath = path.join(__dirname, "public", "index.html");
+    let html = fs.readFileSync(htmlPath, "utf8");
+    const title = "CSB Run — " + (run.crownModelId || "unknown") + " took the crown";
+    const desc = "Prompt: " + (run.prompt || "").slice(0, 160);
+    html = html.replace("<title>CSB — Chat Shit Bob</title>", "<title>" + title + "</title>");
+    html = html.replace(
+      '<meta property="og:description" content="The AI benchmarking show nobody asked for. We rank which LLM gave the sh*ttest answer.">',
+      '<meta property="og:description" content="' + desc + '">'
+    );
+    html = html.replace(
+      '<meta property="og:title" content="CSB — Chat Shit Bob">',
+      '<meta property="og:title" content="' + title + '">'
+    );
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(html);
   });
 
   app.get("*", function(req, res) {

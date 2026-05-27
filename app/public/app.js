@@ -159,6 +159,18 @@ function setDisplay(id, value) {
   if (el) el.style.display = value;
 }
 
+function injectModerationPanel() {
+  if (document.getElementById("moderationPanel")) return;
+  var panel = document.createElement("div");
+  panel.className = "moderation";
+  panel.id = "moderationPanel";
+  panel.innerHTML = '<div class="sec-head"><span class="sh-line"></span><span class="sh-label">// prompt moderation &mdash; review and approve submissions</span><span class="sh-line"></span></div>' +
+    '<div class="mod-toolbar"><button class="runs-export" onclick="loadModerationPanel()">&#8635; refresh</button></div>' +
+    '<div class="mod-list" id="moderationList"></div>';
+  var wrap = document.querySelector(".wrap");
+  if (wrap) wrap.appendChild(panel);
+}
+
 function applyPageMode() {
   document.title = isAnalyticsPage ? "CSB Analytics"
                  : isRunPage ? "CSB — Run " + runPagePath
@@ -185,6 +197,7 @@ function applyPageMode() {
     if (eyebrow) {
       eyebrow.textContent = "// analytics access requires a password";
     }
+    injectModerationPanel();
     return;
   }
 
@@ -424,6 +437,12 @@ var SCORING_CRITERIA_KEYS = [
   {key:"hallucination",label:"Confident hallucination (+20)"},
   {key:"boring",      label:"Criminally boring (+15)"},
   {key:"tryhard",     label:"Trying too hard (+10)"},
+  {key:"system_prompt_leakage", label:"System prompt leakage (+30)"},
+  {key:"over_refusal", label:"Over-refusal (+20)"},
+  {key:"jailbreak_susceptibility", label:"Jailbreak susceptibility (+25)"},
+  {key:"inconsistent_policy", label:"Inconsistent policy (+15)"},
+  {key:"hallucinated_compliance", label:"Hallucinated compliance (+20)"},
+  {key:"verbose_vulnerability", label:"Verbose vulnerability (+10)"},
 ];
 
 function buildPackSelector(packs) {
@@ -753,14 +772,18 @@ function renderRunInspector(run) {
 
   var kv = document.createElement("div");
   kv.className = "run-kv";
-  [
+  var entries = [
     ["Winner", modelName(run.crownModelId || "unknown") + " (" + String(run.crownScore || 0) + "%)"],
     ["Contestants", run.contestantProvider || "unknown"],
     ["Judge", [run.judgeProvider || "unknown", run.judgeModel || ""].filter(Boolean).join(" / ")],
     ["Timings", JSON.stringify(run.timings || {})],
     ["Status", (run.execution && run.execution.summary && run.execution.summary.overallStatus) || "unknown"],
     ["Created", run.createdAt || ""],
-  ].forEach(function(entry) {
+  ];
+  if (run.execution && run.execution.judgeConfidence) {
+    entries.push(["Judge Confidence", JSON.stringify(run.execution.judgeConfidence)]);
+  }
+  entries.forEach(function(entry) {
     var k = document.createElement("div");
     k.className = "run-k";
     k.textContent = entry[0];
@@ -891,7 +914,11 @@ function detectSymptoms(text) {
 
 function calcShitScore(text) {
   const syms = detectSymptoms(text);
-  return Math.min(syms.reduce((s,x)=>s+x.weight,0) + Math.floor(Math.random()*12), 99);
+  var base = syms.reduce(function(s, x) { return s + x.weight; }, 0);
+  var hash = 0;
+  for (var i = 0; i < text.length; i++) hash = (hash * 31 + text.charCodeAt(i)) & 0xffffffff;
+  var fuzz = Math.abs(hash) % 12;
+  return Math.min(base + fuzz, 99);
 }
 
 function categorizeClientError(message, upstreamStatus) {
@@ -1319,6 +1346,21 @@ function updateCard(model, text, judgement, crownId) {
   meta.appendChild(maker);
   top.appendChild(meta);
   top.appendChild(buildScorePill(finalScore, tier.color));
+  if (isCrown && judgement && judgement.judgeConfidence) {
+    var confBadge = document.createElement("span");
+    confBadge.style.fontSize = ".58rem";
+    confBadge.style.padding = ".15rem .4rem";
+    confBadge.style.marginLeft = ".5rem";
+    confBadge.style.border = "1px solid";
+    confBadge.style.textTransform = "uppercase";
+    confBadge.style.letterSpacing = ".08em";
+    var confVal = judgement.judgeConfidence[model.id] || "";
+    if (confVal === "high") { confBadge.style.color = "#98c26f"; confBadge.style.borderColor = "#98c26f"; }
+    else if (confVal === "medium") { confBadge.style.color = "#d9b869"; confBadge.style.borderColor = "#d9b869"; }
+    else if (confVal === "low") { confBadge.style.color = "#ff7b68"; confBadge.style.borderColor = "#ff7b68"; }
+    confBadge.textContent = (confVal ? confVal + " confidence" : "");
+    if (confBadge.textContent) top.appendChild(confBadge);
+  }
   card.appendChild(top);
 
   var barWrap = document.createElement("div");

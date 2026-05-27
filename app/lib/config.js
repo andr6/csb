@@ -80,7 +80,16 @@ const MODEL_CATALOGUE = {};
 Object.keys(process.env).forEach(function(key) {
   if (/^MODEL_[A-Z0-9_]+$/.test(key)) {
     var id = key.replace(/^MODEL_/, "").toLowerCase();
-    MODEL_CATALOGUE[id] = process.env[key];
+    var value = process.env[key];
+    if (!value || typeof value !== "string" || value.trim().length === 0) {
+      console.warn("[config] Skipping empty model env var:", key);
+      return;
+    }
+    if (value.indexOf("/") === -1) {
+      console.warn("[config] Skipping model env var without provider prefix:", key, "=", value);
+      return;
+    }
+    MODEL_CATALOGUE[id] = value.trim();
   }
 });
 

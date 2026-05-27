@@ -814,6 +814,33 @@ test("POST /api/judge — crown change does NOT fire when same model keeps #1", 
   assert.equal(webhookCalled, false, "no webhook when same model retains #1");
 });
 
+test("GET /api/health returns provider status", async function() {
+  const app = createApp({
+    analyticsPagePassword: TEST_PASS,
+    checkProviderHealth: async function(provider) {
+      return provider === "openrouter" ? "reachable" : "unreachable";
+    },
+  });
+  const res = await invoke(app, "GET", "/api/health", null, TEST_AUTH);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.providerStatus.openrouter, "reachable");
+  assert.equal(res.body.providerStatus.anthropic, "unreachable");
+});
+
+test("GET /api/analytics caches identical queries", async function() {
+  let calls = 0;
+  const app = createApp({
+    analyticsPagePassword: TEST_PASS,
+    getAnalysisAnalytics: function() {
+      calls++;
+      return { totalRuns: 1 };
+    },
+  });
+  await invoke(app, "GET", "/api/analytics", null, TEST_AUTH);
+  await invoke(app, "GET", "/api/analytics", null, TEST_AUTH);
+  assert.equal(calls, 1, "second identical request served from cache");
+});
+
 test("GET /api/runs?isChallenge=true returns only challenge runs", async function() {
   let capturedOptions = null;
   const app = createApp({
@@ -829,3 +856,19 @@ test("GET /api/runs?isChallenge=true returns only challenge runs", async functio
   assert.equal(res.statusCode, 200);
   assert.equal(capturedOptions && capturedOptions.isChallenge, 1, "isChallenge=true maps to numeric 1 in options");
 });
+
+test("GET /run/:id returns HTML with run meta tags", async function() {
+  const app = createApp({
+    analyticsPagePassword: TEST_PASS,
+    getAnalysisRun: function(id) {
+      if (id !== "run-1") return null;
+      return { crownModelId: "alpha", prompt: "test prompt for OG" };
+    },
+  });
+
+  const res = await invoke(app, "GET", "/run/run-1");
+  assert.equal(res.statusCode, 200);
+  assert.ok(res.text.indexOf("alpha took the crown") !== -1, "HTML contains crown model");
+  assert.ok(res.text.indexOf("test prompt for OG") !== -1, "HTML contains prompt");
+});
+

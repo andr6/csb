@@ -4,10 +4,8 @@ const { runSqlParams, queryJsonParams } = require("./sqlite");
 const _mem = new Map();
 
 function pruneExpired() {
-  try {
-    const { runSqlParams } = require("./sqlite");
-    runSqlParams("DELETE FROM rate_limit_hits WHERE reset_at < ?", [Date.now() - 86400000]);
-  } catch (_) {}
+  const { runSqlParams } = require("./sqlite");
+  runSqlParams("DELETE FROM rate_limit_hits WHERE reset_at < ?", [Date.now() - 86400000]);
 }
 
 function createRateLimitStore(limiterName) {
@@ -49,6 +47,7 @@ function createRateLimitStore(limiterName) {
 
       return { totalHits: totalHits, resetTime: new Date(resetAt) };
     } catch (e) {
+      console.warn("[rate-limit] sqlite failed, using memory fallback:", e.message);
       const memKey = name + "\x00" + key;
       const entry = _mem.get(memKey);
       let totalHits;
