@@ -166,9 +166,7 @@ function applyPageMode() {
                  : "CSB — Chat Shit Bob";
 
   var homeLink = document.getElementById("homeLink");
-  var analyticsLink = document.getElementById("analyticsLink");
   if (homeLink) homeLink.classList.toggle("header-link--active", !isAnalyticsPage && !isRunPage && !isModelProfilePage);
-  if (analyticsLink) analyticsLink.classList.toggle("header-link--active", isAnalyticsPage);
 
   if (isAnalyticsPage) {
     setDisplay("modes", "none");
