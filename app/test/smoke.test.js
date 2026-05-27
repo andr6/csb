@@ -12,10 +12,10 @@ const { isAllowedOrigin } = require("../lib/cors");
 const { validatePrompt } = require("../lib/validation");
 const { normalizeJudgePayload, parseJudgeResponse } = require("../lib/judge");
 
-test("parseAllowedOrigins returns trimmed entries", function() {
+test("parseAllowedOrigins returns trimmed entries with www variants", function() {
   assert.deepEqual(
     parseAllowedOrigins(" https://a.test,https://b.test ,, "),
-    ["https://a.test", "https://b.test"]
+    ["https://a.test", "https://www.a.test", "https://b.test", "https://www.b.test"]
   );
 });
 
@@ -27,7 +27,7 @@ test("isAllowedOrigin accepts configured origins and no-origin requests", functi
 
 test("validatePrompt enforces prompt bounds", function() {
   assert.equal(validatePrompt("ok"), "Prompt too short.");
-  assert.equal(validatePrompt("a".repeat(501)), "Prompt too long (max 500 chars).");
+  assert.equal(validatePrompt("a".repeat(1501)), "Prompt too long (max 1500 chars).");
   assert.equal(validatePrompt("tell me something cursed"), null);
 });
 

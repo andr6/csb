@@ -169,6 +169,10 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
 .btn-fire:disabled{background:var(--border);color:var(--muted);cursor:not-allowed}
 .btn-reset{width:100%;margin-top:.75rem;background:none;border:1px solid var(--border);color:var(--muted);font-family:'DM Mono',monospace;font-size:.75rem;padding:.75rem;cursor:pointer;text-transform:uppercase;letter-spacing:.15em;transition:all .15s}
 .btn-reset:hover{border-color:var(--shit);color:var(--shit)}
+.blind-toggle{display:block;width:100%;margin-top:.5rem;color:var(--muted);font-family:'DM Mono',monospace;font-size:.68rem;cursor:pointer;text-transform:uppercase;letter-spacing:.08em}
+.blind-toggle input{margin-right:.4rem;vertical-align:middle}
+.btn-reveal{width:100%;margin-top:.5rem;background:var(--s2);border:1px solid var(--gold);color:var(--gold);font-family:'Anton',sans-serif;font-size:1.1rem;letter-spacing:.08em;padding:.75rem;cursor:pointer;transition:all .15s}
+.btn-reveal:hover{background:var(--gold);color:#000}
 
 /* ERROR */
 .error-banner{background:rgba(220,38,38,.1);border:1px solid var(--shit);padding:.75rem 1.25rem;margin:.75rem 0;font-size:.75rem;color:var(--shit);display:none}
@@ -500,6 +504,15 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
     <div class="criteria-grid" id="criteriaGrid"></div>
   </div>
 
+  <!-- TOURNAMENT -->
+  <div class="criteria-picker" id="tournamentPanel" style="display:none">
+    <div class="criteria-picker-label">// tournament bracket — 16 models, single elimination</div>
+    <div id="tournamentSetup">
+      <button class="btn-random" onclick="createTournament()">🏆 CREATE BRACKET</button>
+    </div>
+    <div id="tournamentBracket" style="margin-top:1rem"></div>
+  </div>
+
   <!-- INPUT -->
   <div class="input-sec" id="inputSection">
     <div class="input-row-label">
@@ -511,8 +524,10 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
       <div class="input-footer"><span class="char-c" id="charCount">0/1500</span></div>
     </div>
     <div class="error-banner" id="errorBanner"></div>
+    <label class="blind-toggle"><input type="checkbox" id="blindToggle"> 🎭 Blind Taste Test — hide model identities until reveal</label>
     <button class="btn-fire" id="fireBtn" onclick="fire()" disabled>💩 FIRE AT ALL LLMS</button>
     <button class="btn-reset" id="resetBtn" style="display:none" onclick="reset()">&#8635; reset &mdash; go again</button>
+    <button class="btn-reveal" id="revealBtn" style="display:none" onclick="revealBlind()">👁 REVEAL MODELS</button>
   </div>
 
   <!-- RESULTS -->
@@ -644,6 +659,10 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
       <div class="analytics-panel">
         <div class="analytics-title">Lineup Proposal</div>
         <div class="lineup-row" id="analyticsLineups"></div>
+      </div>
+      <div class="analytics-panel">
+        <div class="analytics-title">Model Drift &mdash; 14 Day</div>
+        <div class="trend-list" id="analyticsDrift"></div>
       </div>
     </div>
   </div>

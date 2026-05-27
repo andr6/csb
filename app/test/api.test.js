@@ -198,6 +198,33 @@ test("POST /api/judge returns normalized verdict payload", async function() {
   });
 });
 
+test("POST /api/judge stores and returns blindMapping", async function() {
+  var savedRun = null;
+  const app = createApp({
+    validatePageToken: () => true,
+    judgeSystemPrompt: getPack("bar").judgeSystemPrompt,
+    callJudge: async function() {
+      return JSON.stringify({ scores: { model_a: 80, model_b: 20 }, verdicts: { model_a: "bad", model_b: "good" }, crown: "model_a", roast: "roast" });
+    },
+    addAnalysisRun: function(run) { savedRun = run; return { id: "run-2" }; },
+  });
+
+  const res = await invoke(app, "POST", "/api/judge", {
+    prompt: "test",
+    responses: { model_a: "a", model_b: "b" },
+    meta: {
+      timings: { contestantMsByModel: {} },
+      execution: {},
+      blindMapping: { model_a: "alpha", model_b: "beta" },
+    },
+  }, { "content-type": "application/json" });
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.body.blindMapping, { model_a: "alpha", model_b: "beta" });
+  assert.equal(savedRun.execution.blindMapping.model_a, "alpha");
+  assert.equal(savedRun.execution.blindMapping.model_b, "beta");
+});
+
 test("POST /api/fire rejects unknown model ids", async function() {
   const app = createApp({ validatePageToken: () => true });
   const res = await invoke(app, "POST", "/api/fire", {
@@ -870,5 +897,56 @@ test("GET /run/:id returns HTML with run meta tags", async function() {
   assert.equal(res.statusCode, 200);
   assert.ok(res.text.indexOf("alpha took the crown") !== -1, "HTML contains crown model");
   assert.ok(res.text.indexOf("test prompt for OG") !== -1, "HTML contains prompt");
+});
+
+test("GET /api/drift returns drift data structure", async function() {
+  const app = createApp({
+    analyticsPagePassword: TEST_PASS,
+  });
+
+  const res = await invoke(app, "GET", "/api/drift", null, TEST_AUTH);
+  assert.equal(res.statusCode, 200);
+  assert.ok(typeof res.body.windowDays === "number", "windowDays is a number");
+  assert.ok(typeof res.body.threshold === "number", "threshold is a number");
+  assert.ok(Array.isArray(res.body.models), "models is an array");
+  assert.ok(typeof res.body.driftDetectedCount === "number", "driftDetectedCount is a number");
+});
+
+test("POST /api/tournament creates a bracket", async function() {
+  const app = createApp({
+    analyticsPagePassword: TEST_PASS,
+  });
+
+  const res = await invoke(app, "POST", "/api/tournament", { models: ["alpha", "beta", "gamma", "delta"] }, { "content-type": "application/json" });
+  assert.equal(res.statusCode, 200);
+  assert.ok(res.body.id, "tournament has id");
+  assert.equal(res.body.bracketSize, 4, "4 models padded to bracket size 4");
+  assert.equal(res.body.rounds, 2, "4 models = 2 rounds");
+});
+
+test("GET /api/tournament/:id returns bracket data", async function() {
+  const app = createApp({
+    analyticsPagePassword: TEST_PASS,
+  });
+
+  const createRes = await invoke(app, "POST", "/api/tournament", { models: ["alpha", "beta"] }, { "content-type": "application/json" });
+  const id = createRes.body.id;
+
+  const res = await invoke(app, "GET", "/api/tournament/" + id);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.status, "pending");
+  assert.ok(Array.isArray(res.body.rounds), "has rounds");
+});
+
+test("POST /api/tournament rejects invalid model counts", async function() {
+  const app = createApp({
+    analyticsPagePassword: TEST_PASS,
+  });
+
+  const res1 = await invoke(app, "POST", "/api/tournament", { models: ["alpha"] }, { "content-type": "application/json" });
+  assert.equal(res1.statusCode, 400, "1 model rejected");
+
+  const res2 = await invoke(app, "POST", "/api/tournament", { models: Array(17).fill("x") }, { "content-type": "application/json" });
+  assert.equal(res2.statusCode, 400, "17 models rejected");
 });
 

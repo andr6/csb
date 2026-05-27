@@ -51,8 +51,59 @@ function modelMaker(modelString) {
   return makers[prefix] || prefix.charAt(0).toUpperCase() + prefix.slice(1);
 }
 
+// ── BLIND TASTE TEST HELPERS ─────────────────────────────────────────────────
+function createBlindMapping(modelIds) {
+  var labels = modelIds.map(function(_, i) { return "model_" + String.fromCharCode(97 + i); }); // model_a, model_b, ...
+  var shuffled = labels.slice();
+  for (var i = shuffled.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = tmp;
+  }
+  var mapping = {};
+  var reversed = {};
+  modelIds.forEach(function(id, idx) {
+    mapping[shuffled[idx]] = id;
+    reversed[id] = shuffled[idx];
+  });
+  return { mapping: mapping, reversed: reversed };
+}
+
+function swapKeys(obj, mapping) {
+  if (!obj || typeof obj !== "object") return obj;
+  var out = {};
+  Object.keys(obj).forEach(function(k) {
+    out[mapping[k] || k] = obj[k];
+  });
+  return out;
+}
+
+function getBlindLabel(modelId) {
+  if (!_blindMode || _blindRevealed) return modelName(modelId);
+  var anon = _blindReversed && _blindReversed[modelId];
+  if (!anon) return modelName(modelId);
+  return "Model " + anon.replace("model_", "").toUpperCase();
+}
+
+function getBlindGlyph(modelId) {
+  if (!_blindMode || _blindRevealed) return modelGlyph(modelId);
+  var anon = _blindReversed && _blindReversed[modelId];
+  if (!anon) return modelGlyph(modelId);
+  return "?";
+}
+
+function getBlindMaker() {
+  if (!_blindMode || _blindRevealed) return undefined;
+  return "hidden";
+}
+
 // MODELS — populated by init() from /api/config
 var MODELS = [];
+
+// Blind Taste Test state
+var _blindMode = false;
+var _blindMapping = null;   // { anonKey: realModelId }
+var _blindReversed = null;  // { realModelId: anonKey }
+var _blindRevealed = false;
 
 const MODES = [
   {
@@ -89,6 +140,13 @@ const MODES = [
     desc:"You pick the sins to judge",
     icon:
       '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="2.2" fill="none" stroke="currentColor" stroke-width="1.9"/><circle cx="12" cy="17" r="2.2" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M2 7h7.8M14.2 7H22M2 17h7.8M14.2 17H22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="square"/></svg>'
+  },
+  {
+    id:"tournament",
+    label:"TOURNAMENT",
+    desc:"16 models, single elimination",
+    icon:
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h4v4H4zM4 10h4v4H4zM4 16h4v4H4zM16 4h4v4h-4zM16 10h4v4h-4zM16 16h4v4h-4zM8 6h8M8 12h8M8 18h8" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="square"/></svg>'
   },
 ];
 
@@ -426,6 +484,7 @@ function setMode(id) {
   updateChar();
   setDisplay("versusPickers", id === "versus" ? "flex" : "none");
   setDisplay("criteriaPicker", id === "custom" ? "block" : "none");
+  setDisplay("tournamentPanel", id === "tournament" ? "block" : "none");
   if (id === "custom") buildCriteriaGrid();
 }
 
@@ -604,18 +663,19 @@ function buildLoadingCard(model) {
   var glyph = document.createElement("span");
   glyph.className = "card-glyph";
   glyph.style.color = model.color;
-  glyph.textContent = model.glyph;
+  glyph.textContent = getBlindGlyph(model.id);
   top.appendChild(glyph);
 
   var meta = document.createElement("div");
   var name = document.createElement("div");
   name.className = "card-name";
   name.style.color = model.color;
-  name.textContent = model.name;
+  name.textContent = getBlindLabel(model.id);
   meta.appendChild(name);
   var maker = document.createElement("div");
   maker.className = "card-maker";
-  maker.textContent = model.maker;
+  var blindMaker = getBlindMaker();
+  maker.textContent = blindMaker === "hidden" ? "identity concealed" : model.maker;
   meta.appendChild(maker);
   top.appendChild(meta);
 
@@ -984,32 +1044,48 @@ async function judgeResponses(prompt, allResponses, modelsOverride, _isRetry) {
   });
   if (!judgableList.length) throw new Error("All models failed — nothing to judge.");
 
+  // Blind mode: swap to anonymized keys for judging
+  var anonResponses = judgableList.reduce(function(out, model) {
+    var key = (_blindMode && _blindReversed) ? _blindReversed[model.id] : model.id;
+    out[key || model.id] = allResponses[model.id];
+    return out;
+  }, {});
+  var anonTimings = {};
+  var anonExec = {};
+  if (_blindMode && _blindReversed) {
+    judgableList.forEach(function(model) {
+      var key = _blindReversed[model.id];
+      if (key) {
+        if (responseTimings[model.id] !== undefined) anonTimings[key] = responseTimings[model.id];
+        if (executionModels[model.id]) anonExec[key] = executionModels[model.id];
+      }
+    });
+  } else {
+    anonTimings = responseTimings;
+    anonExec = executionModels;
+  }
+
+  var metaBase = {
+    timings: { contestantMsByModel: anonTimings },
+    execution: {
+      summary: {
+        overallStatus: Object.values(executionModels).every(function(item) { return item.status === "success"; })
+          ? "success"
+          : (Object.values(executionModels).some(function(item) { return item.status === "success"; }) ? "partial_failure" : "failure"),
+      },
+      models: anonExec,
+      policy: { retry: "none", fallback: "none" },
+    },
+  };
+  if (_blindMode && _blindMapping) metaBase.blindMapping = _blindMapping;
+
   const res = await fetch("/api/judge", {
     method: "POST",
     headers: {"Content-Type":"application/json", "X-Page-Token": _pageToken},
     body: JSON.stringify(Object.assign({
       prompt: prompt,
-      responses: judgableList.reduce(function(out, model) {
-        out[model.id] = allResponses[model.id];
-        return out;
-      }, {}),
-      meta: {
-        timings: {
-          contestantMsByModel: responseTimings,
-        },
-        execution: {
-          summary: {
-            overallStatus: Object.values(executionModels).every(function(item) { return item.status === "success"; })
-              ? "success"
-              : (Object.values(executionModels).some(function(item) { return item.status === "success"; }) ? "partial_failure" : "failure"),
-          },
-          models: executionModels,
-          policy: {
-            retry: "none",
-            fallback: "none",
-          },
-        },
-      },
+      responses: anonResponses,
+      meta: metaBase,
     }, getActiveCriteria() ? {criteria: getActiveCriteria()} : {}, {pack: _activePack})),
   });
   var data;
@@ -1021,6 +1097,14 @@ async function judgeResponses(prompt, allResponses, modelsOverride, _isRetry) {
     return judgeResponses(prompt, allResponses, modelsOverride, true);
   }
   if (!res.ok) throw new Error(data.error || "Judge error");
+
+  // Blind mode: map results back to real model IDs
+  if (_blindMode && _blindMapping && data) {
+    if (data.scores) data.scores = swapKeys(data.scores, _blindMapping);
+    if (data.verdicts) data.verdicts = swapKeys(data.verdicts, _blindMapping);
+    if (data.crown) data.crown = _blindMapping[data.crown] || data.crown;
+    if (data.judgeConfidence) data.judgeConfidence = swapKeys(data.judgeConfidence, _blindMapping);
+  }
   return data;
 }
 
@@ -1180,9 +1264,22 @@ async function fire() {
   // F2 — restrict to two models in versus mode
   var activeModels = getActiveModels();
 
+  // Blind mode setup
+  var blindToggle = document.getElementById("blindToggle");
+  _blindMode = blindToggle ? blindToggle.checked : false;
+  _blindRevealed = false;
+  if (_blindMode) {
+    var bm = createBlindMapping(activeModels.map(function(m) { return m.id; }));
+    _blindMapping = bm.mapping;
+    _blindReversed = bm.reversed;
+  } else {
+    _blindMapping = null; _blindReversed = null;
+  }
+
   // UI state
   document.getElementById("fireBtn").style.display   = "none";
   document.getElementById("resetBtn").style.display  = "block";
+  document.getElementById("revealBtn").style.display = _blindMode ? "block" : "none";
   document.getElementById("results").style.display   = "block";
   document.getElementById("roastBox").style.display  = "none";
   document.getElementById("errorBanner").style.display = "none";
@@ -1255,6 +1352,8 @@ async function fire() {
 
   if (judgement && judgement.roast) {
     document.getElementById("roastBox").style.display = "block";
+    var roastText = document.getElementById("roastText");
+    roastText.dataset.originalRoast = judgement.roast;
     typewrite("roastText", judgement.roast);
   }
 
@@ -1332,17 +1431,18 @@ function updateCard(model, text, judgement, crownId) {
   var glyph = document.createElement("span");
   glyph.className = "card-glyph";
   glyph.style.color = model.color;
-  glyph.textContent = model.glyph;
+  glyph.textContent = getBlindGlyph(model.id);
   top.appendChild(glyph);
   var meta = document.createElement("div");
   var name = document.createElement("div");
   name.className = "card-name";
   name.style.color = model.color;
-  name.textContent = model.name;
+  name.textContent = getBlindLabel(model.id);
   meta.appendChild(name);
   var maker = document.createElement("div");
   maker.className = "card-maker";
-  maker.textContent = model.maker;
+  var blindMaker = getBlindMaker();
+  maker.textContent = blindMaker === "hidden" ? "identity concealed" : model.maker;
   meta.appendChild(maker);
   top.appendChild(meta);
   top.appendChild(buildScorePill(finalScore, tier.color));
@@ -1805,6 +1905,37 @@ function renderAnalytics() {
   });
 }
 
+function renderDrift(data) {
+  var driftPanel = document.getElementById("analyticsDrift");
+  if (!driftPanel) return;
+  driftPanel.textContent = "";
+  var models = data && Array.isArray(data.models) ? data.models : [];
+  if (!models.length) {
+    var empty = document.createElement("div");
+    empty.className = "analytics-empty";
+    empty.textContent = "Not enough history for drift detection. Run more benchmarks.";
+    driftPanel.appendChild(empty);
+    return;
+  }
+  models.forEach(function(m) {
+    var row = document.createElement("div");
+    row.className = "trend-row";
+    var directionColor = m.driftDetected ? (m.direction === "up" ? "#98c26f" : "#ff7b68") : "#777";
+    var shiftText = m.shift > 0 ? "+" + m.shift : String(m.shift);
+    [
+      modelName(m.modelId),
+      (m.latestWindow ? m.latestWindow.avgScore : "0") + " pts",
+      m.driftDetected ? "DRIFT " + shiftText : shiftText,
+    ].forEach(function(value, idx) {
+      var cell = document.createElement("div");
+      cell.textContent = value;
+      if (idx === 2) cell.style.color = directionColor;
+      row.appendChild(cell);
+    });
+    driftPanel.appendChild(row);
+  });
+}
+
 async function refreshHistory() {
   if (isAnalyticsPage) return;
   try {
@@ -1825,6 +1956,13 @@ async function refreshAnalytics(params) {
     renderAnalytics();
   } catch (e) {
     console.warn("Analytics refresh failed:", e.message);
+  }
+  try {
+    const driftRes = await fetch("/api/drift");
+    const driftData = await driftRes.json();
+    renderDrift(driftData);
+  } catch (e) {
+    console.warn("Drift refresh failed:", e.message);
   }
 }
 
@@ -2338,6 +2476,7 @@ function exportRuns(format) {
 function softReset() {
   document.getElementById("fireBtn").style.display   = "block";
   document.getElementById("resetBtn").style.display  = "none";
+  document.getElementById("revealBtn").style.display = "none";
   document.getElementById("results").style.display   = "none";
   document.getElementById("roastBox").style.display  = "none";
   document.getElementById("judgingBanner").style.display = "none";
@@ -2346,6 +2485,86 @@ function softReset() {
   responses = {};
   document.getElementById("errorBanner").style.display = "none";
   responses = {}; votes = {}; autoVotes = {}; userVotes = {};
+  _blindMode = false; _blindMapping = null; _blindReversed = null; _blindRevealed = false;
+}
+
+// ── TOURNAMENT ────────────────────────────────────────────────────────────────
+
+var currentTournament = null;
+
+async function createTournament() {
+  if (!MODELS.length) return;
+  var models = MODELS.map(function(m) { return m.id; }).slice(0, 16);
+  try {
+    var res = await fetch("/api/tournament", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ models: models }),
+    });
+    var data = await res.json();
+    if (data.id) {
+      currentTournament = data;
+      renderTournamentBracket(data.id);
+    }
+  } catch (e) {
+    console.warn("Tournament creation failed:", e.message);
+  }
+}
+
+async function renderTournamentBracket(id) {
+  var bracket = document.getElementById("tournamentBracket");
+  if (!bracket) return;
+  bracket.textContent = "Loading bracket...";
+  try {
+    var res = await fetch("/api/tournament/" + id);
+    var data = await res.json();
+    bracket.textContent = "";
+    if (!data.rounds) {
+      bracket.textContent = "No bracket data.";
+      return;
+    }
+    data.rounds.forEach(function(round) {
+      var roundDiv = document.createElement("div");
+      roundDiv.style.marginBottom = "1.5rem";
+      var roundTitle = document.createElement("div");
+      roundTitle.className = "criteria-picker-label";
+      roundTitle.textContent = "Round " + round.round;
+      roundDiv.appendChild(roundTitle);
+      round.matches.forEach(function(match, idx) {
+        var matchDiv = document.createElement("div");
+        matchDiv.style.border = "1px solid var(--border2)";
+        matchDiv.style.padding = ".5rem .75rem";
+        matchDiv.style.marginBottom = ".4rem";
+        matchDiv.style.display = "flex";
+        matchDiv.style.justifyContent = "space-between";
+        matchDiv.style.alignItems = "center";
+        var aName = match.slotA && match.slotA.id ? modelName(match.slotA.id) : "BYE";
+        var bName = match.slotB && match.slotB.id ? modelName(match.slotB.id) : "BYE";
+        var label = document.createElement("span");
+        label.textContent = aName + " vs " + bName;
+        matchDiv.appendChild(label);
+        if (match.winner) {
+          var winner = document.createElement("span");
+          winner.style.color = "var(--gold)";
+          winner.textContent = "→ " + modelName(match.winner);
+          matchDiv.appendChild(winner);
+        }
+        roundDiv.appendChild(matchDiv);
+      });
+      bracket.appendChild(roundDiv);
+    });
+    if (data.champion) {
+      var champ = document.createElement("div");
+      champ.style.marginTop = "1rem";
+      champ.style.color = "var(--gold)";
+      champ.style.fontFamily = "'Anton',sans-serif";
+      champ.style.fontSize = "1.2rem";
+      champ.textContent = "🏆 CHAMPION: " + modelName(data.champion);
+      bracket.appendChild(champ);
+    }
+  } catch (e) {
+    bracket.textContent = "Failed to load bracket.";
+  }
 }
 
 // Full reset — clears everything including the prompt
@@ -2354,6 +2573,36 @@ function reset() {
   softReset();
   renderRandomStrip();
   updateChar();
+}
+
+function revealBlind() {
+  if (!_blindMode) return;
+  _blindRevealed = true;
+  document.getElementById("revealBtn").style.display = "none";
+  // Re-render all cards to show real names
+  var activeModels = getActiveModels();
+  activeModels.forEach(function(m) {
+    var card = document.getElementById("card-" + m.id);
+    if (!card) return;
+    var nameEl = card.querySelector(".card-name");
+    if (nameEl) nameEl.textContent = m.name;
+    var makerEl = card.querySelector(".card-maker");
+    if (makerEl) makerEl.textContent = m.maker;
+    var glyphEl = card.querySelector(".card-glyph");
+    if (glyphEl) glyphEl.textContent = m.glyph;
+  });
+  // Re-render roast to show real names if it mentions models
+  var roastText = document.getElementById("roastText");
+  if (roastText && roastText.dataset.originalRoast) {
+    var restored = roastText.dataset.originalRoast;
+    Object.keys(_blindMapping || {}).forEach(function(anon) {
+      var real = _blindMapping[anon];
+      var anonName = "Model " + anon.replace("model_", "").toUpperCase();
+      var realName = modelName(real);
+      restored = restored.split(anonName).join(realName);
+    });
+    roastText.textContent = restored;
+  }
 }
 
 // ── MODERATION PANEL ─────────────────────────────────────────────────────────

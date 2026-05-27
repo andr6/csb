@@ -578,6 +578,7 @@ function createApp(overrides) {
             if (judgeRuns > 1) ext.judgeRuns = judgeRuns;
             if (payload.judgeConfidence) ext.judgeConfidence = payload.judgeConfidence;
             if (activePackId !== "bar") ext.pack = activePackId;
+            if (meta.blindMapping) ext.blindMapping = meta.blindMapping;
             return ext;
           }()),
         });
@@ -590,6 +591,7 @@ function createApp(overrides) {
           }
         }
         (deps.dailyIncrement || dailyIncrement)("judge");
+        if (meta.blindMapping) payload.blindMapping = meta.blindMapping;
         res.json(payload);
       } catch (e) {
         addAnalysisRun(buildFailureRun(prompt, responses, meta, "judge_parse", e, raw));
@@ -620,6 +622,7 @@ function createApp(overrides) {
       crownModelId: item.crownModelId,
       crownScore: item.crownScore,
       createdAt: item.createdAt,
+      blindMapping: item.execution && item.execution.blindMapping ? item.execution.blindMapping : undefined,
     });
   });
 
@@ -730,6 +733,39 @@ function createApp(overrides) {
     }
   });
 
+  const tournamentServices = require("./lib/tournament");
+
+  app.post("/api/tournament", publicLimiter, function(req, res) {
+    const models = Array.isArray(req.body.models) ? req.body.models : [];
+    if (models.length < 2 || models.length > 16) {
+      return res.status(400).json({ error: "Provide 2–16 model IDs." });
+    }
+    try {
+      const tournament = tournamentServices.createBracket(models);
+      _tournaments.set(tournament.id, tournament);
+      res.json({ id: tournament.id, bracketSize: tournament.bracketSize, rounds: tournament.rounds.length });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/tournament/:id", publicLimiter, function(req, res) {
+    const tournament = _tournaments.get(req.params.id);
+    if (!tournament) return res.status(404).json({ error: "Tournament not found." });
+    res.json(tournament);
+  });
+
+  app.post("/api/tournament/:id/advance", analyticsAuth, function(req, res) {
+    const tournament = _tournaments.get(req.params.id);
+    if (!tournament) return res.status(404).json({ error: "Tournament not found." });
+    const roundIdx = Number(req.body.roundIdx);
+    const matchIdx = Number(req.body.matchIdx);
+    const winnerId = String(req.body.winnerId || "");
+    const ok = tournamentServices.advanceWinner(tournament, roundIdx, matchIdx, winnerId);
+    if (!ok) return res.status(400).json({ error: "Invalid advance request." });
+    res.json({ ok: true, status: tournament.status, champion: tournament.champion || null });
+  });
+
   app.get("/api/health", analyticsAuth, async function(req, res) {
     const keyStatus = {};
     ["openrouter", "anthropic", "openai", "gemini", "litellm"].forEach(function(p) {
@@ -763,12 +799,21 @@ function createApp(overrides) {
   const _analyticsCache = createTtlCache(30000);
   const _failuresCache = createTtlCache(30000);
 
+  const _tournaments = new Map();
+
   function invalidateAnalyticsCaches() {
     _analyticsCache.clear();
     _failuresCache.clear();
     _statsAnalyticsCache = null;
     _statsAnalyticsCacheAt = 0;
   }
+
+  app.get("/api/drift", analyticsAuth, function(req, res) {
+    const { getModelDriftStats } = require("./lib/drift");
+    const days = Number(req.query.days || 14);
+    const threshold = Number(req.query.threshold || 15);
+    res.json(getModelDriftStats(days, threshold));
+  });
 
   app.get("/api/stats", analyticsAuth, function(req, res) {
     const now = Date.now();
