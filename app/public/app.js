@@ -154,6 +154,18 @@ const CURATED = {
   rage:   [],
   absurd: [],
   truth:  [],
+  versus: [],
+  tournament: [],
+  custom: [],
+  bar:    [],
+  lab:    [],
+  midway: [],
+  booth:  [],
+  news:   [],
+  globe:  [],
+  irc:    [],
+  redteam:[],
+  rally:  [],
 };
 
 const VOTE_LABELS = ["ABSOLUTE GARBAGE","STILL BAD","MEDIOCRE","TOLERABLE","SOMEHOW OK"];
@@ -336,6 +348,18 @@ function init() {
         CURATED.rage   = promptsPayload.rage;
         CURATED.absurd = promptsPayload.absurd || CURATED.absurd;
         CURATED.truth  = promptsPayload.truth  || CURATED.truth;
+        CURATED.versus = promptsPayload.versus || CURATED.versus;
+        CURATED.tournament = promptsPayload.tournament || CURATED.tournament;
+        CURATED.custom = promptsPayload.custom || CURATED.custom;
+        CURATED.bar    = promptsPayload.bar    || CURATED.bar;
+        CURATED.lab    = promptsPayload.lab    || CURATED.lab;
+        CURATED.midway = promptsPayload.midway || CURATED.midway;
+        CURATED.booth  = promptsPayload.booth  || CURATED.booth;
+        CURATED.news   = promptsPayload.news   || CURATED.news;
+        CURATED.globe  = promptsPayload.globe  || CURATED.globe;
+        CURATED.irc    = promptsPayload.irc    || CURATED.irc;
+        CURATED.redteam= promptsPayload.redteam|| CURATED.redteam;
+        CURATED.rally  = promptsPayload.rally  || CURATED.rally;
       }
       if (cfg._token) _pageToken = cfg._token;
       if (cfg.packs && cfg.packs.length) buildPackSelector(cfg.packs);
@@ -448,10 +472,18 @@ function renderModes() {
 
 function renderRandomStrip() {
   const strip = document.getElementById("randomStrip");
-  const pool  = CURATED[currentMode];
+  // Prefer pack-specific prompts, fall back to mode-specific
+  var pool = CURATED[_activePack] && CURATED[_activePack].length
+    ? CURATED[_activePack]
+    : CURATED[currentMode];
   // Show 3 random prompts as clickable pills
   const picks = pool.slice().sort(()=>Math.random()-.5).slice(0,3);
   strip.textContent = "";
+  if (!picks.length) {
+    strip.style.display = "none";
+    return;
+  }
+  strip.style.display = "";
   var label = document.createElement("span");
   label.className = "random-strip-label";
   label.textContent = "try:";
@@ -524,6 +556,7 @@ function buildPackSelector(packs) {
         b.classList.toggle("active", b.dataset.pack === pack.id);
       });
       if (teaser) teaser.textContent = pack.teaser || "";
+      renderRandomStrip();
     });
     container.appendChild(btn);
   });
@@ -574,7 +607,10 @@ function handleTyping() {
 
 function randomPrompt() {
   _userIsTyping = false;
-  var pool = CURATED[currentMode];
+  // Prefer pack-specific prompts, fall back to mode-specific
+  var pool = CURATED[_activePack] && CURATED[_activePack].length
+    ? CURATED[_activePack]
+    : CURATED[currentMode];
   var picked = pool[Math.floor(Math.random()*pool.length)];
   document.getElementById("promptInput").value = picked;
   renderRandomStrip();
