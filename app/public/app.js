@@ -154,6 +154,17 @@ const CURATED = {
   rage:   [],
   absurd: [],
   truth:  [],
+  versus: [],
+  tournament: [],
+  bar:    [],
+  lab:    [],
+  midway: [],
+  booth:  [],
+  news:   [],
+  globe:  [],
+  irc:    [],
+  redteam:[],
+  rally:  [],
 };
 
 const VOTE_LABELS = ["ABSOLUTE GARBAGE","STILL BAD","MEDIOCRE","TOLERABLE","SOMEHOW OK"];
@@ -336,6 +347,17 @@ function init() {
         CURATED.rage   = promptsPayload.rage;
         CURATED.absurd = promptsPayload.absurd || CURATED.absurd;
         CURATED.truth  = promptsPayload.truth  || CURATED.truth;
+        CURATED.versus = promptsPayload.versus || CURATED.versus;
+        CURATED.tournament = promptsPayload.tournament || CURATED.tournament;
+        CURATED.bar    = promptsPayload.bar    || CURATED.bar;
+        CURATED.lab    = promptsPayload.lab    || CURATED.lab;
+        CURATED.midway = promptsPayload.midway || CURATED.midway;
+        CURATED.booth  = promptsPayload.booth  || CURATED.booth;
+        CURATED.news   = promptsPayload.news   || CURATED.news;
+        CURATED.globe  = promptsPayload.globe  || CURATED.globe;
+        CURATED.irc    = promptsPayload.irc    || CURATED.irc;
+        CURATED.redteam= promptsPayload.redteam|| CURATED.redteam;
+        CURATED.rally  = promptsPayload.rally  || CURATED.rally;
       }
       if (cfg._token) _pageToken = cfg._token;
       if (cfg.packs && cfg.packs.length) buildPackSelector(cfg.packs);
