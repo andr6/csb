@@ -402,6 +402,38 @@ function createApp(overrides) {
     });
   });
 
+  // Protected prompt endpoints — require valid page token so prompts are only
+  // accessible to clients that loaded the app through /api/config.
+  function requirePageToken(req, res, next) {
+    const validateToken = deps.validatePageToken || validatePageToken;
+    if (!validateToken(req.headers["x-page-token"])) {
+      return res.status(403).json({ error: "Forbidden." });
+    }
+    next();
+  }
+
+  app.get("/api/pack-prompts", publicLimiter, requirePageToken, function(req, res) {
+    const filePath = path.join(__dirname, "lib", "prompts", "pack-prompts.json");
+    try {
+      const data = fs.readFileSync(filePath, "utf8");
+      res.setHeader("Content-Type", "application/json");
+      res.send(data);
+    } catch (e) {
+      res.status(500).json({ error: "Prompt data unavailable." });
+    }
+  });
+
+  app.get("/api/mode-prompts", publicLimiter, requirePageToken, function(req, res) {
+    const filePath = path.join(__dirname, "lib", "prompts", "mode-prompts.json");
+    try {
+      const data = fs.readFileSync(filePath, "utf8");
+      res.setHeader("Content-Type", "application/json");
+      res.send(data);
+    } catch (e) {
+      res.status(500).json({ error: "Prompt data unavailable." });
+    }
+  });
+
   app.get("/api/runs", analyticsAuth, function(req, res) {
     const filters = buildRunFilters(req.query);
     res.json({

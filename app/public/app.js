@@ -327,25 +327,36 @@ function init() {
     budget: { slice: null, daily: null, monthlyProjected: null, averageDailySpendUsd: 0 },
     recommendations: {},
   };
-  var requests = [
-    fetch("/api/config").then(function(r) { return r.json(); }),
-    fetch("/api/history").then(function(r) { return r.json(); }).catch(function() { return emptyHistoryPayload; }),
-    isAnalyticsPage ? fetch("/api/runs?limit=10").then(function(r) { return r.json(); }).catch(function() { return emptyRunsPayload; }) : Promise.resolve(emptyRunsPayload),
-    isAnalyticsPage ? fetch("/api/failures/summary").then(function(r) { return r.json(); }).catch(function() { return emptyFailurePayload; }) : Promise.resolve(emptyFailurePayload),
-    isAnalyticsPage ? fetch("/api/analytics").then(function(r) { return r.json(); }).catch(function() { return emptyAnalyticsPayload; }) : Promise.resolve(emptyAnalyticsPayload),
-    fetch("/pack-prompts.json").then(function(r) { return r.json(); }).catch(function() { return null; }),
-    fetch("/mode-prompts.json").then(function(r) { return r.json(); }).catch(function() { return null; }),
-  ];
+  // Fetch config first to obtain the page token, then fetch everything else
+  // in parallel (prompt endpoints require the token in X-Page-Token).
+  fetch("/api/config")
+    .then(function(r) { return r.json(); })
+    .then(function(cfg) {
+      if (cfg._token) _pageToken = cfg._token;
 
-  Promise.all(requests)
-    .then(function(results) {
-      var cfg = results[0];
-      var historyPayload = results[1];
-      var runsPayload = results[2];
-      var failurePayload = results[3];
-      var analyticsPayload = results[4];
-      var packPayload = results[5];
-      var modePayload = results[6];
+      var tokenHeader = { "X-Page-Token": _pageToken };
+      var requests = [
+        fetch("/api/history").then(function(r) { return r.json(); }).catch(function() { return emptyHistoryPayload; }),
+        isAnalyticsPage ? fetch("/api/runs?limit=10").then(function(r) { return r.json(); }).catch(function() { return emptyRunsPayload; }) : Promise.resolve(emptyRunsPayload),
+        isAnalyticsPage ? fetch("/api/failures/summary").then(function(r) { return r.json(); }).catch(function() { return emptyFailurePayload; }) : Promise.resolve(emptyFailurePayload),
+        isAnalyticsPage ? fetch("/api/analytics").then(function(r) { return r.json(); }).catch(function() { return emptyAnalyticsPayload; }) : Promise.resolve(emptyAnalyticsPayload),
+        fetch("/api/pack-prompts",  { headers: tokenHeader }).then(function(r) { return r.json(); }).catch(function() { return null; }),
+        fetch("/api/mode-prompts",  { headers: tokenHeader }).then(function(r) { return r.json(); }).catch(function() { return null; }),
+      ];
+
+      return Promise.all(requests).then(function(results) {
+        return { cfg: cfg, results: results };
+      });
+    })
+    .then(function(batch) {
+      var cfg = batch.cfg;
+      var results = batch.results;
+      var historyPayload = results[0];
+      var runsPayload = results[1];
+      var failurePayload = results[2];
+      var analyticsPayload = results[3];
+      var packPayload = results[4];
+      var modePayload = results[5];
       if (packPayload) {
         if (packPayload.rage)     CURATED.rage    = packPayload.rage;
         if (packPayload.absurd)   CURATED.absurd  = packPayload.absurd || CURATED.absurd;
@@ -365,7 +376,6 @@ function init() {
         if (modePayload.tournament) CURATED.tournament = modePayload.tournament || CURATED.tournament;
         if (modePayload.custom)     CURATED.custom     = modePayload.custom     || CURATED.custom;
       }
-      if (cfg._token) _pageToken = cfg._token;
       if (cfg.packs && cfg.packs.length) buildPackSelector(cfg.packs);
       var modelMap = cfg.models || {};
       // Build MODELS array dynamically — no hardcoded metadata needed
