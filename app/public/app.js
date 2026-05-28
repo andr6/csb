@@ -827,6 +827,20 @@ function buildLeaderboardRow(entry, rank) {
 
   row.appendChild(metaEl);
 
+  if (entry.createdAt) {
+    var timeEl = document.createElement("span");
+    timeEl.className = "lb-time";
+    timeEl.style.fontSize = ".65rem";
+    timeEl.style.color = "var(--muted)";
+    timeEl.style.whiteSpace = "nowrap";
+    try {
+      timeEl.textContent = new Date(entry.createdAt).toISOString().replace("T"," ").slice(0,19) + " UTC";
+    } catch (_) {
+      timeEl.textContent = String(entry.createdAt);
+    }
+    row.appendChild(timeEl);
+  }
+
   var promptEl = document.createElement("span");
   promptEl.className = "lb-prompt";
   promptEl.textContent = '"' + entry.prompt.slice(0,55) + (entry.prompt.length > 55 ? "..." : "") + '"';
