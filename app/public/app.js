@@ -2653,18 +2653,30 @@ async function renderTournamentBracket(id) {
         // Judge commentary for completed matches
         if (scores && (scores.verdicts || scores.roast)) {
           var commentDiv = document.createElement("div");
-          commentDiv.style.marginTop = ".4rem";
-          commentDiv.style.paddingTop = ".4rem";
-          commentDiv.style.borderTop = "1px dashed var(--border2)";
-          commentDiv.style.fontSize = ".72rem";
-          commentDiv.style.color = "var(--muted)";
-          commentDiv.style.lineHeight = "1.4";
+          commentDiv.style.marginTop = ".5rem";
+          commentDiv.style.padding = ".5rem .6rem";
+          commentDiv.style.background = "rgba(152,194,111,0.08)";
+          commentDiv.style.borderLeft = "3px solid var(--gold)";
+          commentDiv.style.borderRadius = "0 4px 4px 0";
+          commentDiv.style.fontSize = ".8rem";
+          commentDiv.style.color = "var(--fg)";
+          commentDiv.style.lineHeight = "1.5";
+
+          var header = document.createElement("div");
+          header.style.fontWeight = "700";
+          header.style.fontSize = ".7rem";
+          header.style.textTransform = "uppercase";
+          header.style.letterSpacing = ".04em";
+          header.style.color = "var(--gold)";
+          header.style.marginBottom = ".25rem";
+          header.textContent = "🎙️ JUDGE SAYS";
+          commentDiv.appendChild(header);
 
           if (scores.roast) {
             var roastLine = document.createElement("div");
-            roastLine.style.marginBottom = ".3rem";
+            roastLine.style.marginBottom = ".35rem";
             roastLine.style.fontStyle = "italic";
-            roastLine.textContent = "🎙️ " + scores.roast;
+            roastLine.textContent = scores.roast;
             commentDiv.appendChild(roastLine);
           }
 
@@ -2673,18 +2685,18 @@ async function renderTournamentBracket(id) {
             var bVerdict = scores.verdicts[match.slotB && match.slotB.id] || "";
             if (aVerdict || bVerdict) {
               var vLine = document.createElement("div");
+              vLine.style.display = "flex";
+              vLine.style.flexWrap = "wrap";
+              vLine.style.gap = ".4rem";
               if (aVerdict) {
-                var aSpan = document.createElement("span");
-                aSpan.textContent = aName + ": " + aVerdict;
-                vLine.appendChild(aSpan);
-              }
-              if (aVerdict && bVerdict) {
-                vLine.appendChild(document.createTextNode("  |  "));
+                var aWrap = document.createElement("span");
+                aWrap.innerHTML = "<strong>" + aName + ":</strong> " + aVerdict;
+                vLine.appendChild(aWrap);
               }
               if (bVerdict) {
-                var bSpan = document.createElement("span");
-                bSpan.textContent = bName + ": " + bVerdict;
-                vLine.appendChild(bSpan);
+                var bWrap = document.createElement("span");
+                bWrap.innerHTML = "<strong>" + bName + ":</strong> " + bVerdict;
+                vLine.appendChild(bWrap);
               }
               commentDiv.appendChild(vLine);
             }
