@@ -388,7 +388,7 @@ function createApp(overrides) {
       judgeProvider: JUDGE_PROVIDER,
       judgeModel: JUDGE_MODEL,
       packs: Object.values(PACKS).map(function(p) {
-        return { id: p.id, name: p.name, tagline: p.tagline, teaser: p.teaser || "" };
+        return { id: p.id, name: p.name, tagline: p.tagline, teaser: p.teaser || "", persona: p.persona || "" };
       }),
       criteria: judgeServices.SCORING_CRITERIA.map(function(c) { return { key: c.key, label: c.label }; }),
       redteamCriteria: judgeServices.REDTEAM_CRITERIA.map(function(c) { return { key: c.key, label: c.label }; }),

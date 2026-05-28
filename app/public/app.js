@@ -183,6 +183,7 @@ const SYMPTOMS = [
 var _pageToken = "";
 var _tokenRefreshPromise = null;
 var _activePack = "bar";
+var _packPersonas = {};  // { packId: persona }
 var isAnalyticsPage = window.location.pathname === "/analytics";
 
 // Refresh the page token from /api/config — deduplicates concurrent callers so
@@ -227,6 +228,13 @@ const RUNS_PAGE_SIZE = 10;
 function setDisplay(id, value) {
   var el = document.getElementById(id);
   if (el) el.style.display = value;
+}
+
+function updateResultsHeader() {
+  var el = document.getElementById("resultsPersonaHeader");
+  if (!el) return;
+  var persona = _packPersonas[_activePack] || "bar-owner";
+  el.textContent = "// each model was given a " + persona + " persona — high score = safety training won";
 }
 
 function injectModerationPanel() {
@@ -376,7 +384,10 @@ function init() {
         if (modePayload.tournament) CURATED.tournament = modePayload.tournament || CURATED.tournament;
         if (modePayload.custom)     CURATED.custom     = modePayload.custom     || CURATED.custom;
       }
-      if (cfg.packs && cfg.packs.length) buildPackSelector(cfg.packs);
+      if (cfg.packs && cfg.packs.length) {
+        buildPackSelector(cfg.packs);
+        cfg.packs.forEach(function(p) { if (p.persona) _packPersonas[p.id] = p.persona; });
+      }
       var modelMap = cfg.models || {};
       // Build MODELS array dynamically — no hardcoded metadata needed
       MODELS = Object.keys(modelMap).map(function(id) {
@@ -417,6 +428,7 @@ function init() {
       // F2 populate versus pickers (only meaningful on main arena page)
       if (!isAnalyticsPage) {
         populateVersusPickers();
+        buildCriteriaGrid();
       }
       // F4 honor ?replay= query
       var qs = new URLSearchParams(window.location.search || "");
@@ -526,12 +538,20 @@ function setMode(id) {
   currentMode = id;
   renderModes();
   renderRandomStrip();
-  document.getElementById("promptInput").value = "";
+  // Only clear prompt when no results are showing — mirror pack-switch behavior
+  if (document.getElementById("results").style.display === "none") {
+    document.getElementById("promptInput").value = "";
+  }
   updateChar();
   setDisplay("versusPickers", id === "versus" ? "flex" : "none");
   setDisplay("criteriaPicker", id === "custom" ? "block" : "none");
   setDisplay("tournamentPanel", id === "tournament" ? "block" : "none");
   if (id === "custom") buildCriteriaGrid();
+  // If results are showing, allow immediate re-fire with the new mode
+  if (document.getElementById("results").style.display !== "none") {
+    document.getElementById("fireBtn").style.display = "block";
+    document.getElementById("resetBtn").style.display = "none";
+  }
 }
 
 var SCORING_CRITERIA_KEYS = [
@@ -576,6 +596,7 @@ function buildPackSelector(packs) {
         document.getElementById("fireBtn").style.display = "block";
         document.getElementById("resetBtn").style.display = "none";
       }
+      updateResultsHeader();
       renderRandomStrip();
     });
     container.appendChild(btn);
@@ -589,7 +610,10 @@ function buildPackSelector(packs) {
 
 function buildCriteriaGrid() {
   var grid = document.getElementById("criteriaGrid");
-  if (!grid || grid.children.length) return;
+  if (!grid) return;
+  // Rebuild if empty or if criteria count changed (e.g., config updated)
+  if (grid.children.length && grid.children.length === SCORING_CRITERIA_KEYS.length) return;
+  grid.textContent = "";
   SCORING_CRITERIA_KEYS.forEach(function(c) {
     var label = document.createElement("label");
     label.className = "criteria-item";
@@ -1184,12 +1208,12 @@ function loadCommunityPrompts() {
     .catch(function() {});
 }
 
-function renderShareLink() {
+function renderShareLink(firedPrompt) {
   var results = document.getElementById("results");
   if (!results) return;
   var existing = document.getElementById("shareLinkWrap");
   if (existing) existing.remove();
-  var prompt = (document.getElementById("promptInput") && document.getElementById("promptInput").value.trim()) || "";
+  var prompt = firedPrompt || ((document.getElementById("promptInput") && document.getElementById("promptInput").value.trim()) || "");
   if (!prompt) return;
   var wrap = document.createElement("div");
   wrap.id = "shareLinkWrap";
@@ -1333,6 +1357,7 @@ async function fire() {
   }
 
   // UI state
+  updateResultsHeader();
   document.getElementById("fireBtn").style.display   = "none";
   document.getElementById("resetBtn").style.display  = "block";
   document.getElementById("revealBtn").style.display = _blindMode ? "block" : "none";
@@ -1414,7 +1439,7 @@ async function fire() {
   }
 
   // F1 — share link inside results, idempotent
-  renderShareLink();
+  renderShareLink(prompt);
 
   // F4 — replay diff if a baseline was stashed
   if (window._replayBaseScores && judgement && judgement.scores) {
