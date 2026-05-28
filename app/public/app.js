@@ -2711,6 +2711,17 @@ async function renderTournamentBracket(id) {
   }
 }
 
+async function refreshBracket(bracketId) {
+  try {
+    var res = await fetch("/api/tournament/" + bracketId);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) {
+    console.warn("Bracket refresh failed:", e.message);
+    return null;
+  }
+}
+
 async function advanceTournamentWinner(bracketId, roundIdx, matchIdx, winnerId) {
   try {
     var res = await fetch("/api/tournament/" + bracketId + "/advance", {
@@ -2760,6 +2771,10 @@ async function runTournament(prompt, models) {
 
   // Run each round
   for (var roundIdx = 0; roundIdx < bracket.rounds.length; roundIdx++) {
+    // Refresh bracket from server so propagated winners are visible
+    var refreshed = await refreshBracket(bracket.id);
+    if (refreshed && refreshed.rounds) bracket = refreshed;
+
     var round = bracket.rounds[roundIdx];
     for (var matchIdx = 0; matchIdx < round.matches.length; matchIdx++) {
       var match = round.matches[matchIdx];
@@ -2780,11 +2795,15 @@ async function runTournament(prompt, models) {
       }
       if (!aReal) {
         await advanceTournamentWinner(bracket.id, roundIdx, matchIdx, match.slotB.id);
+        var r1 = await refreshBracket(bracket.id);
+        if (r1 && r1.rounds) bracket = r1;
         await renderTournamentBracket(bracket.id);
         continue;
       }
       if (!bReal) {
         await advanceTournamentWinner(bracket.id, roundIdx, matchIdx, match.slotA.id);
+        var r2 = await refreshBracket(bracket.id);
+        if (r2 && r2.rounds) bracket = r2;
         await renderTournamentBracket(bracket.id);
         continue;
       }
@@ -2819,6 +2838,8 @@ async function runTournament(prompt, models) {
       if (!anySuccess) {
         // Both failed — advance A deterministically
         await advanceTournamentWinner(bracket.id, roundIdx, matchIdx, match.slotA.id);
+        var r0 = await refreshBracket(bracket.id);
+        if (r0 && r0.rounds) bracket = r0;
         _tournamentScores[(roundIdx + 1) + "-" + matchIdx] = { aScore: 0, bScore: 0, winnerId: match.slotA.id };
         await renderTournamentBracket(bracket.id);
         continue;
@@ -2848,11 +2869,15 @@ async function runTournament(prompt, models) {
       _tournamentScores[(roundIdx + 1) + "-" + matchIdx].winnerId = winnerId;
 
       await advanceTournamentWinner(bracket.id, roundIdx, matchIdx, winnerId);
+      var r3 = await refreshBracket(bracket.id);
+      if (r3 && r3.rounds) bracket = r3;
       await renderTournamentBracket(bracket.id);
     }
   }
 
-  // Final render
+  // Final refresh and render to show champion
+  var finalBracket = await refreshBracket(bracket.id);
+  if (finalBracket && finalBracket.rounds) bracket = finalBracket;
   await renderTournamentBracket(bracket.id);
 }
 
