@@ -787,7 +787,7 @@ function createApp(overrides) {
     res.json(tournament);
   });
 
-  app.post("/api/tournament/:id/advance", analyticsAuth, function(req, res) {
+  app.post("/api/tournament/:id/advance", publicLimiter, function(req, res) {
     const tournament = _tournaments.get(req.params.id);
     if (!tournament) return res.status(404).json({ error: "Tournament not found." });
     const roundIdx = Number(req.body.roundIdx);

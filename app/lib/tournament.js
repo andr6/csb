@@ -41,9 +41,13 @@ function createBracket(models) {
     for (var i = 0; i < current.length; i += 2) {
       var a = current[i];
       var b = current[i + 1];
-      if (a && a.winner) next.push(a);
-      else if (b && b.winner) next.push(b);
-      else next.push({ id: null, seed: null, winner: false, score: null });
+      // Real model vs bye: real model advances
+      if (a && a.id !== null && (!b || b.id === null)) { next.push(a); continue; }
+      if (b && b.id !== null && (!a || a.id === null)) { next.push(b); continue; }
+      // Both byes: bye advances
+      if (a && a.winner) { next.push(a); continue; }
+      if (b && b.winner) { next.push(b); continue; }
+      next.push({ id: null, seed: null, winner: false, score: null });
     }
     current = next;
     if (current.length > 1) {

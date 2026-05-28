@@ -104,6 +104,7 @@ var _blindMode = false;
 var _blindMapping = null;   // { anonKey: realModelId }
 var _blindReversed = null;  // { realModelId: anonKey }
 var _blindRevealed = false;
+var _tournamentScores = {}; // { "r-m": {aScore, bScore, winnerId} }
 
 const MODES = [
   {
@@ -546,6 +547,7 @@ function setMode(id) {
   setDisplay("versusPickers", id === "versus" ? "flex" : "none");
   setDisplay("criteriaPicker", id === "custom" ? "block" : "none");
   setDisplay("tournamentPanel", id === "tournament" ? "block" : "none");
+  if (id !== "tournament") document.getElementById("cardsGrid").style.display = "";
   if (id === "custom") buildCriteriaGrid();
   // If results are showing, allow immediate re-fire with the new mode
   if (document.getElementById("results").style.display !== "none") {
@@ -1365,6 +1367,14 @@ async function fire() {
   document.getElementById("roastBox").style.display  = "none";
   document.getElementById("errorBanner").style.display = "none";
   document.getElementById("judgingBanner").style.display = "none";
+
+  // Tournament mode: run bracket instead of normal flow
+  if (currentMode === "tournament") {
+    document.getElementById("cardsGrid").style.display = "none";
+    await runTournament(prompt, activeModels);
+    return;
+  }
+  document.getElementById("cardsGrid").style.display = "";
 
   // Loading cards
   var cardsGrid = document.getElementById("cardsGrid");
@@ -2567,6 +2577,7 @@ function softReset() {
   document.getElementById("errorBanner").style.display = "none";
   responses = {}; votes = {}; autoVotes = {}; userVotes = {};
   _blindMode = false; _blindMapping = null; _blindReversed = null; _blindRevealed = false;
+  currentTournament = null; _tournamentScores = {};
 }
 
 // ── TOURNAMENT ────────────────────────────────────────────────────────────────
@@ -2621,8 +2632,13 @@ async function renderTournamentBracket(id) {
         matchDiv.style.alignItems = "center";
         var aName = match.slotA && match.slotA.id ? modelName(match.slotA.id) : "BYE";
         var bName = match.slotB && match.slotB.id ? modelName(match.slotB.id) : "BYE";
+        var scores = _tournamentScores[round.round + "-" + idx];
+        var labelText = aName + " vs " + bName;
+        if (scores) {
+          labelText += "  (" + (scores.aScore || 0) + " — " + (scores.bScore || 0) + ")";
+        }
         var label = document.createElement("span");
-        label.textContent = aName + " vs " + bName;
+        label.textContent = labelText;
         matchDiv.appendChild(label);
         if (match.winner) {
           var winner = document.createElement("span");
@@ -2646,6 +2662,145 @@ async function renderTournamentBracket(id) {
   } catch (e) {
     bracket.textContent = "Failed to load bracket.";
   }
+}
+
+async function advanceTournamentWinner(bracketId, roundIdx, matchIdx, winnerId) {
+  try {
+    var res = await fetch("/api/tournament/" + bracketId + "/advance", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ roundIdx: roundIdx, matchIdx: matchIdx, winnerId: winnerId }),
+    });
+    return res.ok;
+  } catch (e) {
+    console.warn("Tournament advance failed:", e.message);
+    return false;
+  }
+}
+
+async function runTournament(prompt, models) {
+  if (!models.length) return;
+  _tournamentScores = {};
+  var bracketEl = document.getElementById("tournamentBracket");
+  if (bracketEl) bracketEl.textContent = "Creating bracket...";
+
+  // Create bracket
+  var bracketData;
+  try {
+    var res = await fetch("/api/tournament", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ models: models.map(function(m) { return m.id; }) }),
+    });
+    bracketData = await res.json();
+    if (!bracketData.id) throw new Error("No bracket ID returned");
+    currentTournament = bracketData;
+  } catch (e) {
+    if (bracketEl) bracketEl.textContent = "Failed to create bracket.";
+    showError("Tournament creation failed: " + e.message);
+    return;
+  }
+
+  // Fetch full bracket
+  var bracket;
+  try {
+    var bres = await fetch("/api/tournament/" + bracketData.id);
+    bracket = await bres.json();
+  } catch (e) {
+    if (bracketEl) bracketEl.textContent = "Failed to load bracket.";
+    return;
+  }
+
+  // Run each round
+  for (var roundIdx = 0; roundIdx < bracket.rounds.length; roundIdx++) {
+    var round = bracket.rounds[roundIdx];
+    for (var matchIdx = 0; matchIdx < round.matches.length; matchIdx++) {
+      var match = round.matches[matchIdx];
+
+      // Already decided (e.g., bye propagated from backend)
+      if (match.winner) {
+        await renderTournamentBracket(bracket.id);
+        continue;
+      }
+
+      // Bye handling
+      var aReal = match.slotA && match.slotA.id !== null;
+      var bReal = match.slotB && match.slotB.id !== null;
+      if (!aReal && !bReal) {
+        // Both byes — nothing to do
+        await renderTournamentBracket(bracket.id);
+        continue;
+      }
+      if (!aReal) {
+        await advanceTournamentWinner(bracket.id, roundIdx, matchIdx, match.slotB.id);
+        await renderTournamentBracket(bracket.id);
+        continue;
+      }
+      if (!bReal) {
+        await advanceTournamentWinner(bracket.id, roundIdx, matchIdx, match.slotA.id);
+        await renderTournamentBracket(bracket.id);
+        continue;
+      }
+
+      // Real match: run both models
+      var matchResponses = {};
+      var anySuccess = false;
+      var aResult, bResult;
+      try {
+        aResult = await fireModel(prompt, match.slotA.id);
+        matchResponses[match.slotA.id] = aResult.text;
+        matchResponses[match.slotA.id + "__timing"] = aResult.timingMs;
+        matchResponses[match.slotA.id + "__exec"] = { status: "success", upstreamStatus: aResult.upstreamStatus, durationMs: aResult.timingMs, retryCount: 0, fallbackUsed: false };
+        anySuccess = true;
+      } catch (e) {
+        matchResponses[match.slotA.id] = "[Error: " + e.message + "]";
+        matchResponses[match.slotA.id + "__timing"] = null;
+        matchResponses[match.slotA.id + "__exec"] = { status: "error", upstreamStatus: e.upstreamStatus || 500, durationMs: e.durationMs || null, error: e.message, retryCount: 0, fallbackUsed: false };
+      }
+      try {
+        bResult = await fireModel(prompt, match.slotB.id);
+        matchResponses[match.slotB.id] = bResult.text;
+        matchResponses[match.slotB.id + "__timing"] = bResult.timingMs;
+        matchResponses[match.slotB.id + "__exec"] = { status: "success", upstreamStatus: bResult.upstreamStatus, durationMs: bResult.timingMs, retryCount: 0, fallbackUsed: false };
+        anySuccess = true;
+      } catch (e) {
+        matchResponses[match.slotB.id] = "[Error: " + e.message + "]";
+        matchResponses[match.slotB.id + "__timing"] = null;
+        matchResponses[match.slotB.id + "__exec"] = { status: "error", upstreamStatus: e.upstreamStatus || 500, durationMs: e.durationMs || null, error: e.message, retryCount: 0, fallbackUsed: false };
+      }
+
+      if (!anySuccess) {
+        // Both failed — advance A deterministically
+        await advanceTournamentWinner(bracket.id, roundIdx, matchIdx, match.slotA.id);
+        _tournamentScores[(roundIdx + 1) + "-" + matchIdx] = { aScore: 0, bScore: 0, winnerId: match.slotA.id };
+        await renderTournamentBracket(bracket.id);
+        continue;
+      }
+
+      // Judge head-to-head
+      var judgement = null;
+      try {
+        var matchModels = models.filter(function(m) { return m.id === match.slotA.id || m.id === match.slotB.id; });
+        judgement = await judgeResponses(prompt, matchResponses, matchModels);
+      } catch (e) {
+        console.warn("Tournament judge failed:", e.message);
+      }
+
+      var scoreA = (judgement && judgement.scores && judgement.scores[match.slotA.id] !== undefined) ? judgement.scores[match.slotA.id] : 0;
+      var scoreB = (judgement && judgement.scores && judgement.scores[match.slotB.id] !== undefined) ? judgement.scores[match.slotB.id] : 0;
+      _tournamentScores[(roundIdx + 1) + "-" + matchIdx] = { aScore: scoreA, bScore: scoreB, winnerId: null };
+
+      // Determine winner: higher score wins; tie goes to slotA deterministically
+      var winnerId = scoreA >= scoreB ? match.slotA.id : match.slotB.id;
+      _tournamentScores[(roundIdx + 1) + "-" + matchIdx].winnerId = winnerId;
+
+      await advanceTournamentWinner(bracket.id, roundIdx, matchIdx, winnerId);
+      await renderTournamentBracket(bracket.id);
+    }
+  }
+
+  // Final render
+  await renderTournamentBracket(bracket.id);
 }
 
 // Full reset — clears everything including the prompt
