@@ -570,6 +570,12 @@ function buildPackSelector(packs) {
         b.classList.toggle("active", b.dataset.pack === pack.id);
       });
       if (teaser) teaser.textContent = pack.teaser || "";
+      // If results are already showing, allow immediate re-fire with the new pack
+      // without requiring the user to click Reset first.
+      if (document.getElementById("results").style.display !== "none") {
+        document.getElementById("fireBtn").style.display = "block";
+        document.getElementById("resetBtn").style.display = "none";
+      }
       renderRandomStrip();
     });
     container.appendChild(btn);
