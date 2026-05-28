@@ -103,6 +103,9 @@ function normalizeJson5Like(str) {
 
 function parseJudgeResponse(raw) {
   var text = String(raw || "").trim();
+  if (!text) {
+    throw new Error("Judge returned empty response.");
+  }
   var cleaned = text
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/i, "")

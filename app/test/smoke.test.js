@@ -78,6 +78,19 @@ test("parseJudgeResponse throws with raw snippet on total failure", function() {
   }, /this is not json at all/);
 });
 
+test("parseJudgeResponse throws clear message on empty response", function() {
+  const { parseJudgeResponse } = require("../lib/judge");
+  assert.throws(function() {
+    parseJudgeResponse("");
+  }, /empty response/);
+  assert.throws(function() {
+    parseJudgeResponse("   ");
+  }, /empty response/);
+  assert.throws(function() {
+    parseJudgeResponse(null);
+  }, /empty response/);
+});
+
 test("MODEL_CATALOGUE skips empty and unprefixed values", function() {
   const originalGarbage = process.env.MODEL_GARBAGE;
   const originalEmpty = process.env.MODEL_EMPTY;
