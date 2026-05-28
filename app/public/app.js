@@ -104,7 +104,7 @@ var _blindMode = false;
 var _blindMapping = null;   // { anonKey: realModelId }
 var _blindReversed = null;  // { realModelId: anonKey }
 var _blindRevealed = false;
-var _tournamentScores = {}; // { "r-m": {aScore, bScore, winnerId} }
+var _tournamentScores = {}; // { "r-m": {aScore, bScore, winnerId, verdicts, roast} }
 
 const MODES = [
   {
@@ -2623,10 +2623,12 @@ async function renderTournamentBracket(id) {
       roundTitle.textContent = "Round " + round.round;
       roundDiv.appendChild(roundTitle);
       round.matches.forEach(function(match, idx) {
+        var matchWrap = document.createElement("div");
+        matchWrap.style.border = "1px solid var(--border2)";
+        matchWrap.style.padding = ".5rem .75rem";
+        matchWrap.style.marginBottom = ".4rem";
+
         var matchDiv = document.createElement("div");
-        matchDiv.style.border = "1px solid var(--border2)";
-        matchDiv.style.padding = ".5rem .75rem";
-        matchDiv.style.marginBottom = ".4rem";
         matchDiv.style.display = "flex";
         matchDiv.style.justifyContent = "space-between";
         matchDiv.style.alignItems = "center";
@@ -2646,7 +2648,52 @@ async function renderTournamentBracket(id) {
           winner.textContent = "→ " + modelName(match.winner);
           matchDiv.appendChild(winner);
         }
-        roundDiv.appendChild(matchDiv);
+        matchWrap.appendChild(matchDiv);
+
+        // Judge commentary for completed matches
+        if (scores && (scores.verdicts || scores.roast)) {
+          var commentDiv = document.createElement("div");
+          commentDiv.style.marginTop = ".4rem";
+          commentDiv.style.paddingTop = ".4rem";
+          commentDiv.style.borderTop = "1px dashed var(--border2)";
+          commentDiv.style.fontSize = ".72rem";
+          commentDiv.style.color = "var(--muted)";
+          commentDiv.style.lineHeight = "1.4";
+
+          if (scores.roast) {
+            var roastLine = document.createElement("div");
+            roastLine.style.marginBottom = ".3rem";
+            roastLine.style.fontStyle = "italic";
+            roastLine.textContent = "🎙️ " + scores.roast;
+            commentDiv.appendChild(roastLine);
+          }
+
+          if (scores.verdicts) {
+            var aVerdict = scores.verdicts[match.slotA && match.slotA.id] || "";
+            var bVerdict = scores.verdicts[match.slotB && match.slotB.id] || "";
+            if (aVerdict || bVerdict) {
+              var vLine = document.createElement("div");
+              if (aVerdict) {
+                var aSpan = document.createElement("span");
+                aSpan.textContent = aName + ": " + aVerdict;
+                vLine.appendChild(aSpan);
+              }
+              if (aVerdict && bVerdict) {
+                vLine.appendChild(document.createTextNode("  |  "));
+              }
+              if (bVerdict) {
+                var bSpan = document.createElement("span");
+                bSpan.textContent = bName + ": " + bVerdict;
+                vLine.appendChild(bSpan);
+              }
+              commentDiv.appendChild(vLine);
+            }
+          }
+
+          matchWrap.appendChild(commentDiv);
+        }
+
+        roundDiv.appendChild(matchWrap);
       });
       bracket.appendChild(roundDiv);
     });
@@ -2788,7 +2835,13 @@ async function runTournament(prompt, models) {
 
       var scoreA = (judgement && judgement.scores && judgement.scores[match.slotA.id] !== undefined) ? judgement.scores[match.slotA.id] : 0;
       var scoreB = (judgement && judgement.scores && judgement.scores[match.slotB.id] !== undefined) ? judgement.scores[match.slotB.id] : 0;
-      _tournamentScores[(roundIdx + 1) + "-" + matchIdx] = { aScore: scoreA, bScore: scoreB, winnerId: null };
+      _tournamentScores[(roundIdx + 1) + "-" + matchIdx] = {
+        aScore: scoreA,
+        bScore: scoreB,
+        winnerId: null,
+        verdicts: (judgement && judgement.verdicts) ? judgement.verdicts : null,
+        roast: (judgement && judgement.roast) ? judgement.roast : null,
+      };
 
       // Determine winner: higher score wins; tie goes to slotA deterministically
       var winnerId = scoreA >= scoreB ? match.slotA.id : match.slotB.id;
