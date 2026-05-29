@@ -521,8 +521,14 @@ function renderRandomStrip() {
   var pool = CURATED[_activePack] && CURATED[_activePack].length
     ? CURATED[_activePack]
     : CURATED[currentMode];
+  if (!Array.isArray(pool)) {
+    strip.style.display = "none";
+    return;
+  }
+  // Filter out non-string / empty values so we never render "undefined"
+  var cleanPool = pool.filter(function(p) { return typeof p === "string" && p.length > 0; });
   // Show 3 random prompts as clickable pills
-  const picks = pool.slice().sort(()=>Math.random()-.5).slice(0,3);
+  const picks = cleanPool.slice().sort(function(){return Math.random()-.5;}).slice(0,3);
   strip.textContent = "";
   if (!picks.length) {
     strip.style.display = "none";
@@ -675,7 +681,10 @@ function randomPrompt() {
   var pool = CURATED[_activePack] && CURATED[_activePack].length
     ? CURATED[_activePack]
     : CURATED[currentMode];
-  var picked = pool[Math.floor(Math.random()*pool.length)];
+  if (!Array.isArray(pool) || !pool.length) return;
+  var cleanPool = pool.filter(function(p) { return typeof p === "string" && p.length > 0; });
+  if (!cleanPool.length) return;
+  var picked = cleanPool[Math.floor(Math.random()*cleanPool.length)];
   document.getElementById("promptInput").value = picked;
   renderRandomStrip();
   updateChar();
@@ -820,6 +829,7 @@ function buildLeaderboardRow(entry, rank) {
   var t = shitTier(entry.score);
   var wrapper = document.createElement("details");
   wrapper.className = "lb-entry";
+  wrapper.open = true;
 
   var row = document.createElement("summary");
   row.className = "lb-row";
@@ -3295,11 +3305,11 @@ function handleOAuthCallback(token, user) {
   localStorage.setItem("csb_session_token", token);
   _currentUser = user;
   updateAuthUI();
-  hideAuthOverlay();
-  // If phone not verified, show phone OTP overlay
+  // If phone not verified, keep overlay visible and show phone OTP view
   if (_currentUser && !_currentUser.phoneVerified) {
     showAuthPhoneOtp();
   } else {
+    hideAuthOverlay();
     window.location.reload();
   }
 }
@@ -3572,6 +3582,7 @@ function handleVerifyPhoneOtp() {
       if (data.ok) {
         if (_currentUser) _currentUser.phoneVerified = true;
         hideAuthOverlay();
+        window.location.reload();
       } else {
         setFieldError("phoneOtpError", data.error || "Invalid or expired code.");
       }
