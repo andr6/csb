@@ -320,7 +320,6 @@ function init() {
     if (!authenticated) {
       setDisplay("authOverlay", "flex");
       showAuthLogin();
-      return;
     }
     _continueInit();
   });
