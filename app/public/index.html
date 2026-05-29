@@ -446,6 +446,26 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
 .back-link{display:inline-block;margin:1rem 0;color:var(--muted);font-family:'DM Mono',monospace;font-size:.72rem;letter-spacing:.1em;text-decoration:none;text-transform:uppercase}
 .back-link:hover{color:var(--gold)}
 .run-prompt-display{font-size:.85rem;color:#cfc9bc;font-style:italic;margin:1rem 0;padding:.85rem 1.1rem;border-left:3px solid var(--gold);background:rgba(15,15,15,.85)}
+
+/* AUTH OVERLAY */
+.auth-overlay{position:fixed;inset:0;z-index:1000;background:rgba(8,8,8,.97);display:flex;align-items:center;justify-content:center;padding:1rem}
+.auth-card{width:100%;max-width:420px;border:1px solid var(--border);background:var(--s1);padding:2rem 1.5rem}
+.auth-title{font-family:'Anton',sans-serif;font-size:1.6rem;color:var(--gold);text-align:center;margin-bottom:.3rem}
+.auth-subtitle{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);text-align:center;margin-bottom:1.5rem}
+.auth-field{margin-bottom:1rem}
+.auth-field label{display:block;font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin-bottom:.35rem}
+.auth-field input{width:100%;padding:.6rem .8rem;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;font-size:.8rem}
+.auth-field input:focus{outline:none;border-color:var(--gold)}
+.auth-error{color:var(--shit);font-size:.7rem;margin-top:.35rem;min-height:1rem}
+.auth-btn{width:100%;padding:.75rem;border:1px solid var(--gold);background:rgba(201,168,76,.1);color:var(--gold);font-family:'DM Mono',monospace;font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;margin-top:.5rem}
+.auth-btn:hover{background:rgba(201,168,76,.2)}
+.auth-btn:disabled{opacity:.5;cursor:not-allowed}
+.auth-switch{text-align:center;margin-top:1rem;font-size:.7rem;color:var(--muted)}
+.auth-switch a{color:var(--gold);cursor:pointer;text-decoration:underline}
+.auth-switch a:hover{color:var(--gold2)}
+.auth-otp{display:flex;gap:.5rem;justify-content:center;margin-bottom:1rem}
+.auth-otp input{width:3rem;text-align:center;font-size:1.2rem;padding:.5rem;border:1px solid var(--border);background:var(--bg);color:var(--text)}
+.auth-otp input:focus{outline:none;border-color:var(--gold)}
 </style>
 </head>
 <body>
@@ -474,6 +494,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
     <p class="header-sub">we rank which LLM gave the sh*ttest answer &mdash; so you don't have to</p>
     <div class="header-actions">
       <a class="header-link" id="homeLink" href="/">benchmark arena</a>
+      <button class="header-link" id="logoutBtn" onclick="logout()" style="display:none">log out</button>
     </div>
   </header>
 
@@ -765,6 +786,116 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
 
   <div class="footer">Created by some lads in planet earth &mdash; '26</div>
 </div>
+
+  <!-- AUTH OVERLAY -->
+  <div id="authOverlay" class="auth-overlay" style="display:none">
+    <div class="auth-card">
+
+      <!-- Registration view -->
+      <div id="authRegisterView">
+        <div class="auth-title">Join the Arena</div>
+        <div class="auth-subtitle">Create your account to enter Chat Shit Bob</div>
+        <div class="auth-field">
+          <label>Name or Alias</label>
+          <input type="text" id="regName" placeholder="At least 4 characters" autocomplete="name">
+          <div class="auth-error" id="regNameError"></div>
+        </div>
+        <div class="auth-field">
+          <label>Email</label>
+          <input type="email" id="regEmail" placeholder="you@example.com" autocomplete="email">
+          <div class="auth-error" id="regEmailError"></div>
+        </div>
+        <div class="auth-field">
+          <label>Phone Number</label>
+          <input type="tel" id="regPhone" placeholder="+1234567890" autocomplete="tel">
+          <div class="auth-error" id="regPhoneError"></div>
+          <div style="font-size:.6rem;color:var(--muted);margin-top:.25rem">We use your phone number only for account verification via SMS. We do not share it with third parties.</div>
+        </div>
+        <div class="auth-field">
+          <label>Password</label>
+          <input type="password" id="regPassword" placeholder="8+ chars, upper, lower, number, special" autocomplete="new-password">
+          <div class="auth-error" id="regPasswordError"></div>
+        </div>
+        <div class="auth-field">
+          <label>Confirm Password</label>
+          <input type="password" id="regConfirmPassword" placeholder="Repeat password" autocomplete="new-password">
+          <div class="auth-error" id="regConfirmError"></div>
+        </div>
+        <button class="auth-btn" id="regBtn" onclick="handleRegister()">Create Account</button>
+        <div class="auth-switch">Already have an account? <a onclick="showAuthLogin()">Log in</a></div>
+      </div>
+
+      <!-- Email OTP view -->
+      <div id="authEmailOtpView" style="display:none">
+        <div class="auth-title">Verify Email</div>
+        <div class="auth-subtitle">Enter the 6-digit code sent to <span id="emailOtpTarget"></span></div>
+        <div class="auth-otp">
+          <input type="text" id="emailOtp1" maxlength="1" inputmode="numeric" oninput="otpAutoAdvance(this,'emailOtp2')">
+          <input type="text" id="emailOtp2" maxlength="1" inputmode="numeric" oninput="otpAutoAdvance(this,'emailOtp3')">
+          <input type="text" id="emailOtp3" maxlength="1" inputmode="numeric" oninput="otpAutoAdvance(this,'emailOtp4')">
+          <input type="text" id="emailOtp4" maxlength="1" inputmode="numeric" oninput="otpAutoAdvance(this,'emailOtp5')">
+          <input type="text" id="emailOtp5" maxlength="1" inputmode="numeric" oninput="otpAutoAdvance(this,'emailOtp6')">
+          <input type="text" id="emailOtp6" maxlength="1" inputmode="numeric" oninput="otpFinish('email')">
+        </div>
+        <div class="auth-error" id="emailOtpError"></div>
+        <button class="auth-btn" id="emailOtpBtn" onclick="handleVerifyEmailOtp()">Verify</button>
+        <div class="auth-switch">Didn't receive it? <a onclick="handleResendEmailOtp()">Resend code</a></div>
+      </div>
+
+      <!-- Login view -->
+      <div id="authLoginView" style="display:none">
+        <div class="auth-title">Welcome Back</div>
+        <div class="auth-subtitle">Log in to Chat Shit Bob</div>
+        <div class="auth-field">
+          <label>Email</label>
+          <input type="email" id="loginEmail" placeholder="you@example.com" autocomplete="email">
+          <div class="auth-error" id="loginEmailError"></div>
+        </div>
+        <div class="auth-field">
+          <label>Password</label>
+          <input type="password" id="loginPassword" placeholder="Your password" autocomplete="current-password">
+          <div class="auth-error" id="loginPasswordError"></div>
+        </div>
+        <div class="auth-error" id="loginGeneralError"></div>
+        <button class="auth-btn" id="loginBtn" onclick="handleLogin()">Log In</button>
+        <div class="auth-switch">
+          <a onclick="showAuthForgotPassword()">Forgot password?</a>
+        </div>
+        <div class="auth-switch">No account? <a onclick="showAuthRegister()">Join the Arena</a></div>
+      </div>
+
+      <!-- Forgot password view -->
+      <div id="authForgotPasswordView" style="display:none">
+        <div class="auth-title">Reset Password</div>
+        <div class="auth-subtitle">Enter your email to receive a reset link</div>
+        <div class="auth-field">
+          <label>Email</label>
+          <input type="email" id="forgotEmail" placeholder="you@example.com" autocomplete="email">
+          <div class="auth-error" id="forgotEmailError"></div>
+        </div>
+        <button class="auth-btn" id="forgotBtn" onclick="handleForgotPassword()">Send Reset Link</button>
+        <div class="auth-switch">Remember your password? <a onclick="showAuthLogin()">Log in</a></div>
+      </div>
+
+      <!-- Phone OTP view -->
+      <div id="authPhoneOtpView" style="display:none">
+        <div class="auth-title">Verify Phone</div>
+        <div class="auth-subtitle">Enter the 6-digit code sent to your phone</div>
+        <div class="auth-otp">
+          <input type="text" id="phoneOtp1" maxlength="1" inputmode="numeric" oninput="otpAutoAdvance(this,'phoneOtp2')">
+          <input type="text" id="phoneOtp2" maxlength="1" inputmode="numeric" oninput="otpAutoAdvance(this,'phoneOtp3')">
+          <input type="text" id="phoneOtp3" maxlength="1" inputmode="numeric" oninput="otpAutoAdvance(this,'phoneOtp4')">
+          <input type="text" id="phoneOtp4" maxlength="1" inputmode="numeric" oninput="otpAutoAdvance(this,'phoneOtp5')">
+          <input type="text" id="phoneOtp5" maxlength="1" inputmode="numeric" oninput="otpAutoAdvance(this,'phoneOtp6')">
+          <input type="text" id="phoneOtp6" maxlength="1" inputmode="numeric" oninput="otpFinish('phone')">
+        </div>
+        <div class="auth-error" id="phoneOtpError"></div>
+        <button class="auth-btn" id="phoneOtpBtn" onclick="handleVerifyPhoneOtp()">Verify</button>
+        <div class="auth-switch">Didn't receive it? <a onclick="handleResendPhoneOtp()">Resend code</a></div>
+      </div>
+
+    </div>
+  </div>
 
 <script src="app.js"></script>
 </body>

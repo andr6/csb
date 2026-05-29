@@ -55,6 +55,24 @@ const WEBHOOK_URL = String(process.env.WEBHOOK_URL || "").trim();
 const DAILY_CHALLENGE_PROMPT = String(process.env.DAILY_CHALLENGE_PROMPT || "").trim();
 const JUDGE_RUNS = Math.max(1, Math.min(5, Number(process.env.JUDGE_RUNS || 1)));
 
+// ── Auth configuration ────────────────────────────────────────────────────────
+const OTP_PEPPER = String(process.env.OTP_PEPPER || "csb-default-pepper-change-me");
+const BCRYPT_ROUNDS = Math.max(10, Math.min(16, Number(process.env.BCRYPT_ROUNDS || 12)));
+const OTP_MAX_ATTEMPTS = Math.max(3, Math.min(10, Number(process.env.OTP_MAX_ATTEMPTS || 5)));
+const OTP_EXPIRY_MINUTES = Math.max(5, Math.min(30, Number(process.env.OTP_EXPIRY_MINUTES || 10)));
+const SESSION_EXPIRY_HOURS = Math.max(1, Math.min(168, Number(process.env.SESSION_EXPIRY_HOURS || 24)));
+const ACCOUNT_LOCKOUT_MINUTES = Math.max(15, Math.min(120, Number(process.env.ACCOUNT_LOCKOUT_MINUTES || 30)));
+
+const MAIL_HOST = String(process.env.MAIL_HOST || "").trim();
+const MAIL_PORT = Number(process.env.MAIL_PORT || 587);
+const MAIL_USER = String(process.env.MAIL_USER || "").trim();
+const MAIL_PASS = String(process.env.MAIL_PASS || "").trim();
+const MAIL_FROM = String(process.env.MAIL_FROM || "").trim();
+
+const SMS_API_KEY = String(process.env.SMS_API_KEY || "").trim();
+
+const ADMIN_EMAIL = "admin@csb.local";
+
 const KEYS = {
   openrouter: process.env.OPENROUTER_API_KEY || "",
   anthropic: process.env.ANTHROPIC_API_KEY || "",
@@ -166,6 +184,19 @@ module.exports = {
   WEBHOOK_URL: WEBHOOK_URL,
   DAILY_CHALLENGE_PROMPT: DAILY_CHALLENGE_PROMPT,
   JUDGE_RUNS: JUDGE_RUNS,
+  ADMIN_EMAIL: ADMIN_EMAIL,
+  OTP_PEPPER: OTP_PEPPER,
+  BCRYPT_ROUNDS: BCRYPT_ROUNDS,
+  OTP_MAX_ATTEMPTS: OTP_MAX_ATTEMPTS,
+  OTP_EXPIRY_MINUTES: OTP_EXPIRY_MINUTES,
+  SESSION_EXPIRY_HOURS: SESSION_EXPIRY_HOURS,
+  ACCOUNT_LOCKOUT_MINUTES: ACCOUNT_LOCKOUT_MINUTES,
+  MAIL_HOST: MAIL_HOST,
+  MAIL_PORT: MAIL_PORT,
+  MAIL_USER: MAIL_USER,
+  MAIL_PASS: MAIL_PASS,
+  MAIL_FROM: MAIL_FROM,
+  SMS_API_KEY: SMS_API_KEY,
   parseAllowedOrigins: parseAllowedOrigins,
   parsePositiveNumber: parsePositiveNumber,
   parseModelPricing: parseModelPricing,

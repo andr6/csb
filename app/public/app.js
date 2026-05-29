@@ -315,6 +315,17 @@ function init() {
   if (isRunPage) { renderRunPage(runPagePath); return; }
   if (isModelProfilePage) { renderModelProfile(modelProfilePath); return; }
 
+  initAuth().then(function(authenticated) {
+    if (!authenticated) {
+      setDisplay("authOverlay", "flex");
+      showAuthLogin();
+      return;
+    }
+    _continueInit();
+  });
+}
+
+function _continueInit() {
   var emptyHistoryPayload = { items: [] };
   var emptyRunsPayload = { items: [] };
   var emptyFailurePayload = { totalFailures: 0, byStatus: {}, byModel: {}, byContestantProvider: {}, byJudgeProvider: {}, judgePhases: {}, errorMessages: {}, errorCategories: {}, upstreamStatuses: {}, latestJudgeParseFailures: [], byRetryPolicy: {}, byFallbackPolicy: {}, totalRetryAttempts: 0, fallbackRuns: 0 };
@@ -3032,5 +3043,369 @@ function moderatePrompt(id, action) {
       list.insertBefore(err, list.firstChild);
     });
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Auth system
+// ═══════════════════════════════════════════════════════════════════════════════
+
+var _authToken = localStorage.getItem("csb_session_token") || "";
+var _currentUser = null;
+var _pendingEmail = "";
+
+// Intercept fetch to inject auth + page-token headers for all /api/* calls
+var _originalFetch = window.fetch;
+window.fetch = function(url, opts) {
+  opts = opts || {};
+  if (typeof url === "string" && url.indexOf("/api/") === 0) {
+    opts.headers = opts.headers || {};
+    if (_authToken && !opts.headers["Authorization"]) {
+      opts.headers["Authorization"] = "Bearer " + _authToken;
+    }
+    if (_pageToken && !opts.headers["X-Page-Token"]) {
+      opts.headers["X-Page-Token"] = _pageToken;
+    }
+  }
+  return _originalFetch(url, opts);
+};
+
+function updateAuthUI() {
+  var logoutBtn = document.getElementById("logoutBtn");
+  if (logoutBtn) logoutBtn.style.display = _currentUser ? "inline-flex" : "none";
+}
+
+function initAuth() {
+  if (!_authToken) return Promise.resolve(false);
+  return fetch("/api/auth/me")
+    .then(function(r) {
+      if (!r.ok) { _authToken = ""; localStorage.removeItem("csb_session_token"); return false; }
+      return r.json();
+    })
+    .then(function(data) {
+      if (data && data.user) {
+        _currentUser = data.user;
+        updateAuthUI();
+        return true;
+      }
+      _authToken = "";
+      localStorage.removeItem("csb_session_token");
+      return false;
+    })
+    .catch(function() {
+      _authToken = "";
+      localStorage.removeItem("csb_session_token");
+      return false;
+    });
+}
+
+function showAuthRegister() {
+  setDisplay("authRegisterView", "block");
+  setDisplay("authEmailOtpView", "none");
+  setDisplay("authLoginView", "none");
+  setDisplay("authPhoneOtpView", "none");
+  setDisplay("authForgotPasswordView", "none");
+}
+function showAuthLogin() {
+  setDisplay("authRegisterView", "none");
+  setDisplay("authEmailOtpView", "none");
+  setDisplay("authLoginView", "block");
+  setDisplay("authPhoneOtpView", "none");
+  setDisplay("authForgotPasswordView", "none");
+}
+function showAuthEmailOtp(email) {
+  _pendingEmail = email || "";
+  document.getElementById("emailOtpTarget").textContent = _pendingEmail;
+  setDisplay("authRegisterView", "none");
+  setDisplay("authEmailOtpView", "block");
+  setDisplay("authLoginView", "none");
+  setDisplay("authPhoneOtpView", "none");
+  setDisplay("authForgotPasswordView", "none");
+  clearOtpInputs("email");
+}
+function showAuthPhoneOtp() {
+  setDisplay("authRegisterView", "none");
+  setDisplay("authEmailOtpView", "none");
+  setDisplay("authLoginView", "none");
+  setDisplay("authForgotPasswordView", "none");
+  setDisplay("authPhoneOtpView", "block");
+  clearOtpInputs("phone");
+}
+function showAuthForgotPassword() {
+  setDisplay("authRegisterView", "none");
+  setDisplay("authEmailOtpView", "none");
+  setDisplay("authLoginView", "none");
+  setDisplay("authPhoneOtpView", "none");
+  setDisplay("authForgotPasswordView", "block");
+}
+function hideAuthOverlay() {
+  setDisplay("authOverlay", "none");
+}
+
+function clearOtpInputs(prefix) {
+  for (var i = 1; i <= 6; i++) {
+    var el = document.getElementById(prefix + "Otp" + i);
+    if (el) el.value = "";
+  }
+}
+function otpAutoAdvance(current, nextId) {
+  if (current.value.length >= 1) {
+    var next = document.getElementById(nextId);
+    if (next) next.focus();
+  }
+}
+function otpFinish(prefix) {
+  // Auto-submit could go here; for now just collect
+}
+function collectOtp(prefix) {
+  var code = "";
+  for (var i = 1; i <= 6; i++) {
+    var el = document.getElementById(prefix + "Otp" + i);
+    code += el ? (el.value || "") : "";
+  }
+  return code;
+}
+
+function setFieldError(id, msg) {
+  var el = document.getElementById(id);
+  if (el) el.textContent = msg || "";
+}
+
+function handleRegister() {
+  var fullName = document.getElementById("regName").value.trim();
+  var email = document.getElementById("regEmail").value.trim();
+  var phone = document.getElementById("regPhone").value.trim();
+  var password = document.getElementById("regPassword").value;
+  var confirmPassword = document.getElementById("regConfirmPassword").value;
+
+  setFieldError("regNameError", fullName.length >= 4 && /^[a-zA-Z0-9\s]+$/.test(fullName) ? "" : "Name must be at least 4 characters, letters/numbers/spaces only.");
+  setFieldError("regEmailError", /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? "" : "Enter a valid email.");
+  setFieldError("regPhoneError", phone.length >= 3 && phone.startsWith("+") ? "" : "Enter a valid phone with country code (e.g. +1234567890).");
+  setFieldError("regPasswordError", password.length >= 8 && /[A-Z]/.test(password) && /[a-z]/.test(password) && /[0-9]/.test(password) && /[^A-Za-z0-9]/.test(password) ? "" : "Password must contain at least 8 characters, including uppercase, lowercase, number, and special character.");
+  setFieldError("regConfirmError", password === confirmPassword ? "" : "Passwords do not match.");
+
+  if (document.querySelectorAll(".auth-error").some(function(el) { return el.textContent; })) return;
+
+  var btn = document.getElementById("regBtn");
+  btn.disabled = true;
+
+  fetch("/api/auth/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fullName: fullName, email: email, phone: phone, password: password, confirmPassword: confirmPassword }),
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      btn.disabled = false;
+      if (data.ok) {
+        showAuthEmailOtp(email);
+      } else {
+        setFieldError("regEmailError", data.error || "Registration failed.");
+      }
+    })
+    .catch(function() {
+      btn.disabled = false;
+      setFieldError("regEmailError", "Registration failed. Please try again.");
+    });
+}
+
+function handleVerifyEmailOtp() {
+  var otp = collectOtp("email");
+  if (otp.length !== 6) {
+    setFieldError("emailOtpError", "Enter the full 6-digit code.");
+    return;
+  }
+  var btn = document.getElementById("emailOtpBtn");
+  btn.disabled = true;
+
+  fetch("/api/auth/verify-email", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: _pendingEmail, otp: otp }),
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      btn.disabled = false;
+      if (data.ok && data.token) {
+        _authToken = data.token;
+        localStorage.setItem("csb_session_token", data.token);
+        _currentUser = data.user;
+        updateAuthUI();
+        hideAuthOverlay();
+        _continueInit();
+        // If phone not verified, show phone OTP after a short delay
+        if (!_currentUser.phoneVerified) {
+          setTimeout(function() { showAuthPhoneOtp(); }, 500);
+        }
+      } else {
+        setFieldError("emailOtpError", data.error || "Invalid or expired code.");
+      }
+    })
+    .catch(function() {
+      btn.disabled = false;
+      setFieldError("emailOtpError", "Verification failed. Please try again.");
+    });
+}
+
+function handleResendEmailOtp() {
+  if (!_pendingEmail) return;
+  fetch("/api/auth/resend-email-otp", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: _pendingEmail }),
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.ok) {
+        setFieldError("emailOtpError", "A new code has been sent.");
+      } else {
+        setFieldError("emailOtpError", data.error || "Unable to resend.");
+      }
+    })
+    .catch(function() {
+      setFieldError("emailOtpError", "Unable to resend.");
+    });
+}
+
+function handleLogin() {
+  var email = document.getElementById("loginEmail").value.trim();
+  var password = document.getElementById("loginPassword").value;
+
+  setFieldError("loginEmailError", /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? "" : "Enter a valid email.");
+  setFieldError("loginPasswordError", password ? "" : "Enter your password.");
+  if (document.getElementById("loginEmailError").textContent || document.getElementById("loginPasswordError").textContent) return;
+
+  var btn = document.getElementById("loginBtn");
+  btn.disabled = true;
+
+  fetch("/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: email, password: password }),
+  })
+    .then(function(r) {
+      if (!r.ok) return r.json().then(function(d) { throw d; });
+      return r.json();
+    })
+    .then(function(data) {
+      btn.disabled = false;
+      if (data.ok && data.token) {
+        _authToken = data.token;
+        localStorage.setItem("csb_session_token", data.token);
+        _currentUser = data.user;
+        updateAuthUI();
+        hideAuthOverlay();
+        _continueInit();
+        // If phone not verified and first login not completed, prompt for phone verification
+        if (!_currentUser.phoneVerified && !_currentUser.firstLoginCompleted) {
+          setTimeout(function() { showAuthPhoneOtp(); }, 500);
+        }
+      } else {
+        setFieldError("loginGeneralError", data.error || "Login failed.");
+      }
+    })
+    .catch(function(data) {
+      btn.disabled = false;
+      setFieldError("loginGeneralError", (data && data.error) ? data.error : "Login failed.");
+    });
+}
+
+function handleVerifyPhoneOtp() {
+  var otp = collectOtp("phone");
+  if (otp.length !== 6) {
+    setFieldError("phoneOtpError", "Enter the full 6-digit code.");
+    return;
+  }
+  var btn = document.getElementById("phoneOtpBtn");
+  btn.disabled = true;
+
+  fetch("/api/auth/verify-phone", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ otp: otp }),
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      btn.disabled = false;
+      if (data.ok) {
+        if (_currentUser) _currentUser.phoneVerified = true;
+        hideAuthOverlay();
+      } else {
+        setFieldError("phoneOtpError", data.error || "Invalid or expired code.");
+      }
+    })
+    .catch(function() {
+      btn.disabled = false;
+      setFieldError("phoneOtpError", "Verification failed. Please try again.");
+    });
+}
+
+function handleForgotPassword() {
+  var email = document.getElementById("forgotEmail").value.trim();
+  setFieldError("forgotEmailError", /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? "" : "Enter a valid email.");
+  if (document.getElementById("forgotEmailError").textContent) return;
+
+  var btn = document.getElementById("forgotBtn");
+  btn.disabled = true;
+
+  fetch("/api/auth/forgot-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: email }),
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      btn.disabled = false;
+      if (data.ok) {
+        setFieldError("forgotEmailError", "If this account exists, a reset link has been sent.");
+      } else {
+        setFieldError("forgotEmailError", data.error || "Request failed.");
+      }
+    })
+    .catch(function() {
+      btn.disabled = false;
+      setFieldError("forgotEmailError", "Request failed. Please try again.");
+    });
+}
+
+function handleResendPhoneOtp() {
+  fetch("/api/auth/resend-phone-otp", { method: "POST", headers: { "Content-Type": "application/json" } })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.ok) {
+        setFieldError("phoneOtpError", "A new code has been sent.");
+      } else {
+        setFieldError("phoneOtpError", data.error || "Unable to resend.");
+      }
+    })
+    .catch(function() {
+      setFieldError("phoneOtpError", "Unable to resend.");
+    });
+}
+
+function logout() {
+  fetch("/api/auth/logout", { method: "POST" })
+    .then(function() {
+      _authToken = "";
+      _currentUser = null;
+      localStorage.removeItem("csb_session_token");
+      window.location.reload();
+    })
+    .catch(function() {
+      _authToken = "";
+      _currentUser = null;
+      localStorage.removeItem("csb_session_token");
+      window.location.reload();
+    });
+}
+
+// Gate Custom Mode behind phone verification
+var _originalSetMode = setMode;
+setMode = function(id) {
+  if (id === "custom" && _currentUser && !_currentUser.phoneVerified) {
+    setDisplay("authOverlay", "flex");
+    showAuthPhoneOtp();
+    return;
+  }
+  _originalSetMode(id);
+};
 
 init();
