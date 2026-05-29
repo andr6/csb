@@ -1071,7 +1071,9 @@ function createApp(overrides) {
   };
 
   function getOAuthRedirectUri(provider, req) {
-    const base = process.env.OAUTH_REDIRECT_BASE || (req.headers.origin || "").replace(/^https?:\/\//, "");
+    var base = process.env.OAUTH_REDIRECT_BASE || (req.headers.origin || "").replace(/^https?:\/\//, "");
+    // Strip any existing scheme so we don't double it (e.g. base already contains https://)
+    base = base.replace(/^https?:\/\//, "");
     return "https://" + base + "/api/auth/oauth/" + provider + "/callback";
   }
 
