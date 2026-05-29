@@ -423,6 +423,7 @@ function _continueInit() {
         contestant: cfg.contestantProvider ? [cfg.contestantProvider] : [],
         judge: cfg.judgeProvider ? [cfg.judgeProvider] : [],
       };
+      updateOAuthButtonVisibility(cfg.oauthProviders);
       history = Array.isArray(historyPayload.items) ? historyPayload.items : [];
       recentRuns = Array.isArray(runsPayload.items) ? runsPayload.items : [];
       failureSummary = failurePayload || null;
@@ -3278,6 +3279,67 @@ function initAuth() {
       localStorage.removeItem("csb_session_token");
       return false;
     });
+}
+
+// ── OAuth popup flow ──────────────────────────────────────────────────────────
+var _oauthPopup = null;
+
+function startOAuth(provider) {
+  var w = 500, h = 600;
+  var left = (window.screen.width - w) / 2;
+  var top = (window.screen.height - h) / 2;
+  _oauthPopup = window.open("/api/auth/oauth/" + provider + "/start", "oauth", "width=" + w + ",height=" + h + ",left=" + left + ",top=" + top);
+}
+
+function handleOAuthCallback(token, user) {
+  _authToken = token;
+  localStorage.setItem("csb_session_token", token);
+  _currentUser = user;
+  updateAuthUI();
+  hideAuthOverlay();
+  // If phone not verified, show phone OTP overlay
+  if (_currentUser && !_currentUser.phoneVerified) {
+    showAuthPhoneOtp();
+  } else {
+    window.location.reload();
+  }
+}
+
+// Listen for OAuth popup message
+window.addEventListener("message", function(event) {
+  if (!event.data) return;
+  var msg;
+  try {
+    msg = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+  } catch (e) { return; }
+  if (msg && msg.type === "oauth_result" && msg.payload) {
+    var payload = typeof msg.payload === "string" ? JSON.parse(msg.payload) : msg.payload;
+    if (payload.error) {
+      console.warn("OAuth failed:", payload.error);
+      var loginGeneralError = document.getElementById("loginGeneralError");
+      if (loginGeneralError) {
+        loginGeneralError.textContent = payload.error;
+        loginGeneralError.style.display = "block";
+      }
+    } else if (payload.token && payload.user) {
+      handleOAuthCallback(payload.token, payload.user);
+    }
+  }
+});
+
+function updateOAuthButtonVisibility(oauthProviders) {
+  if (!oauthProviders) return;
+  var loginWrap = document.getElementById("authOAuthLogin");
+  var regWrap = document.getElementById("authOAuthRegister");
+  var hasAny = oauthProviders.google || oauthProviders.facebook || oauthProviders.instagram;
+  if (loginWrap) loginWrap.style.display = hasAny ? "block" : "none";
+  if (regWrap) regWrap.style.display = hasAny ? "block" : "none";
+  ["google", "facebook", "instagram"].forEach(function(p) {
+    var btns = document.querySelectorAll('.auth-oauth-btn[data-provider="' + p + '"]');
+    btns.forEach(function(btn) {
+      btn.style.display = oauthProviders[p] ? "block" : "none";
+    });
+  });
 }
 
 function showAuthRegister() {

@@ -55,6 +55,7 @@ const { createSessionRepository } = require("./lib/repositories/sessionRepositor
 const { createPasswordResetRepository } = require("./lib/repositories/passwordResetRepository");
 const authService = require("./lib/authService");
 const { createAuthMiddleware } = require("./lib/middleware/authMiddleware");
+const oauthService = require("./lib/oauthService");
 const nodemailer = require("nodemailer");
 
 // ── Daily call circuit breaker ────────────────────────────────────────────────
@@ -574,6 +575,7 @@ function createApp(overrides) {
       redteamCriteria: judgeServices.REDTEAM_CRITERIA.map(function(c) { return { key: c.key, label: c.label }; }),
       _token: deps.generatePageToken ? deps.generatePageToken() : generatePageToken(),
       user: user,
+      oauthProviders: OAUTH_PROVIDERS,
     });
   });
 
@@ -1057,6 +1059,137 @@ function createApp(overrides) {
 
     res.json({ ok: true, message: "Password updated. Please log in with your new password." });
   });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  //  OAuth endpoints
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  const OAUTH_PROVIDERS = {
+    google: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+    facebook: !!(process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET),
+    instagram: !!(process.env.INSTAGRAM_APP_ID && process.env.INSTAGRAM_APP_SECRET),
+  };
+
+  function getOAuthRedirectUri(provider, req) {
+    const base = process.env.OAUTH_REDIRECT_BASE || (req.headers.origin || "").replace(/^https?:\/\//, "");
+    return "https://" + base + "/api/auth/oauth/" + provider + "/callback";
+  }
+
+  // Start OAuth flow — redirect to provider consent screen
+  app.get("/api/auth/oauth/:provider/start", publicLimiter, function(req, res) {
+    const provider = String(req.params.provider || "").toLowerCase();
+    if (!OAUTH_PROVIDERS[provider]) {
+      return res.status(400).json({ error: "OAuth provider not configured." });
+    }
+
+    const state = oauthService.generateState();
+    oauthService.storeState(state);
+
+    const redirectUri = getOAuthRedirectUri(provider, req);
+    const authUrl = oauthService.buildAuthUrl(provider, state, redirectUri);
+    res.redirect(authUrl);
+  });
+
+  // OAuth callback — exchange code for token, fetch profile, create/link user
+  app.get("/api/auth/oauth/:provider/callback", publicLimiter, async function(req, res) {
+    const provider = String(req.params.provider || "").toLowerCase();
+    if (!OAUTH_PROVIDERS[provider]) {
+      return res.status(400).send("OAuth provider not configured.");
+    }
+
+    const code = String(req.query.code || "");
+    const state = String(req.query.state || "");
+    const error = String(req.query.error || "");
+
+    if (error) {
+      return renderOAuthResult(res, { error: "OAuth authorization denied or failed." });
+    }
+    if (!code) {
+      return renderOAuthResult(res, { error: "Authorization code missing." });
+    }
+    if (!oauthService.validateState(state)) {
+      return renderOAuthResult(res, { error: "Invalid or expired OAuth state." });
+    }
+
+    let profile;
+    try {
+      const redirectUri = getOAuthRedirectUri(provider, req);
+      profile = await oauthService.exchangeCode(provider, code, redirectUri);
+    } catch (e) {
+      console.error("[oauth]", provider, "exchange failed:", e.message);
+      return renderOAuthResult(res, { error: "OAuth token exchange failed." });
+    }
+
+    if (!profile.subject) {
+      return renderOAuthResult(res, { error: "OAuth provider did not return a user identifier." });
+    }
+
+    // Try to find existing user by OAuth pair first
+    let user = userRepo.findByOAuth(provider, profile.subject);
+    let isNewUser = false;
+
+    if (!user && profile.email) {
+      // Try to link by email
+      user = userRepo.findByEmail(profile.email);
+      if (user) {
+        userRepo.linkOAuth(user.id, provider, profile.subject);
+        user = userRepo.findById(user.id); // refresh
+      }
+    }
+
+    if (!user) {
+      // Create new OAuth user
+      const userId = userRepo.createOAuthUser({
+        fullName: profile.fullName || profile.email.split("@")[0] || "OAuth User",
+        email: profile.email || (provider + "_" + profile.subject + "@oauth.local"),
+        provider: provider,
+        subject: profile.subject,
+      });
+      user = userRepo.findById(userId);
+      isNewUser = true;
+    }
+
+    if (!user) {
+      return renderOAuthResult(res, { error: "Failed to create or link OAuth account." });
+    }
+
+    // Issue session token
+    sessionRepo.deleteByUser(user.id);
+    const token = authService.generateSessionToken();
+    const tokenHash = authService.hashToken(token);
+    const sessionExpiry = authService.getSessionExpiryDate();
+    sessionRepo.createSession({ userId: user.id, tokenHash, expiresAt: sessionExpiry });
+    userRepo.updateLastLogin(user.id);
+
+    console.log(JSON.stringify({ type: "security", event: "oauth_login", provider: provider, userId: user.id, isNew: isNewUser }));
+
+    const userPayload = {
+      id: user.id,
+      email: user.email,
+      fullName: user.full_name,
+      emailVerified: Boolean(user.email_verified),
+      phoneVerified: Boolean(user.phone_verified),
+      firstLoginCompleted: Boolean(user.first_login_completed),
+      customModeEnabled: Boolean(user.custom_mode_access_enabled),
+      isAdmin: user.email === ADMIN_EMAIL,
+      oauthProvider: provider,
+    };
+
+    return renderOAuthResult(res, { token: token, user: userPayload });
+  });
+
+  function renderOAuthResult(res, payload) {
+    const html =
+      '<!DOCTYPE html><html><head><title>OAuth Result</title></head><body>' +
+      '<script>' +
+      'try { window.opener.postMessage(' + JSON.stringify(JSON.stringify({ type: "oauth_result", payload: payload })) + ', "*"); } catch(e) {}' +
+      'setTimeout(function() { window.close(); }, 500);' +
+      '</script>' +
+      '<p>' + (payload.error ? "Authentication failed." : "Authentication successful. You can close this window.") + '</p>' +
+      '</body></html>';
+    res.setHeader("Content-Type", "text/html");
+    res.send(html);
+  }
 
   app.get("/api/history", publicLimiter, authMw.requireAuth, function(req, res) {
     res.json({

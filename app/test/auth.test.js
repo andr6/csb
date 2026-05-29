@@ -939,3 +939,159 @@ test("Non-admin Bearer token is rejected from analytics", async function() {
 
   assert.equal(res.statusCode, 401);
 });
+
+// ── OAuth tests ───────────────────────────────────────────────────────────────
+
+const oauthService = require("../lib/oauthService");
+
+test("GET /api/auth/oauth/:provider/start redirects for configured provider", async function() {
+  process.env.GOOGLE_CLIENT_ID = "test-google-id";
+  process.env.GOOGLE_CLIENT_SECRET = "test-google-secret";
+  process.env.OAUTH_REDIRECT_BASE = "https://chatshitbob.com";
+
+  const app = createAuthApp();
+  const res = await invoke(app, "GET", "/api/auth/oauth/google/start", null, {
+    origin: "https://chatshitbob.com",
+  });
+
+  assert.equal(res.statusCode, 302);
+  assert.ok(res.headers.location.includes("accounts.google.com"));
+  assert.ok(res.headers.location.includes("client_id=test-google-id"));
+});
+
+test("GET /api/auth/oauth/:provider/start returns 400 for unconfigured provider", async function() {
+  delete process.env.GOOGLE_CLIENT_ID;
+  delete process.env.GOOGLE_CLIENT_SECRET;
+
+  const app = createAuthApp();
+  const res = await invoke(app, "GET", "/api/auth/oauth/google/start", null, {
+    origin: "https://chatshitbob.com",
+  });
+
+  assert.equal(res.statusCode, 400);
+  assert.ok(res.body.error.includes("not configured"));
+});
+
+test("GET /api/auth/oauth/:provider/callback creates new user and issues session", async function() {
+  clearAuthTables();
+  process.env.GOOGLE_CLIENT_ID = "test-google-id";
+  process.env.GOOGLE_CLIENT_SECRET = "test-google-secret";
+  process.env.OAUTH_REDIRECT_BASE = "https://chatshitbob.com";
+
+  const originalExchange = oauthService.exchangeCode;
+  const originalValidate = oauthService.validateState;
+  oauthService.exchangeCode = async function() {
+    return {
+      provider: "google",
+      subject: "google-user-123",
+      email: "oauthuser@example.com",
+      fullName: "OAuth User",
+      picture: "",
+      emailVerified: true,
+    };
+  };
+  oauthService.validateState = function() { return true; };
+
+  const app = createAuthApp();
+  const res = await invoke(app, "GET", "/api/auth/oauth/google/callback?code=testcode&state=teststate", null, {
+    origin: "https://chatshitbob.com",
+  });
+
+  assert.equal(res.statusCode, 200);
+  assert.ok(res.body.includes("Authentication successful"));
+
+  const user = queryJsonParams("SELECT * FROM users WHERE email = ?", ["oauthuser@example.com"]);
+  assert.equal(user.length, 1);
+  assert.equal(user[0].oauth_provider, "google");
+  assert.equal(user[0].oauth_subject, "google-user-123");
+  assert.equal(user[0].email_verified, 1);
+
+  const sessions = queryJsonParams("SELECT * FROM sessions WHERE user_id = ?", [user[0].id]);
+  assert.ok(sessions.length > 0);
+
+  oauthService.exchangeCode = originalExchange;
+  oauthService.validateState = originalValidate;
+});
+
+test("GET /api/auth/oauth/:provider/callback links to existing user by email", async function() {
+  clearAuthTables();
+  process.env.GOOGLE_CLIENT_ID = "test-google-id";
+  process.env.GOOGLE_CLIENT_SECRET = "test-google-secret";
+  process.env.OAUTH_REDIRECT_BASE = "https://chatshitbob.com";
+
+  const app = createAuthApp();
+  await invoke(app, "POST", "/api/auth/register", {
+    fullName: "Existing User",
+    email: "existing@example.com",
+    phone: "+14155552671",
+    password: "TestPass1!",
+    confirmPassword: "TestPass1!",
+  }, { "content-type": "application/json", origin: "https://chatshitbob.com" });
+
+  const originalExchange = oauthService.exchangeCode;
+  const originalValidate = oauthService.validateState;
+  oauthService.exchangeCode = async function() {
+    return {
+      provider: "google",
+      subject: "google-user-456",
+      email: "existing@example.com",
+      fullName: "Existing User",
+      picture: "",
+      emailVerified: true,
+    };
+  };
+  oauthService.validateState = function() { return true; };
+
+  const res = await invoke(app, "GET", "/api/auth/oauth/google/callback?code=testcode&state=teststate", null, {
+    origin: "https://chatshitbob.com",
+  });
+
+  assert.equal(res.statusCode, 200);
+
+  const users = queryJsonParams("SELECT * FROM users WHERE email = ?", ["existing@example.com"]);
+  assert.equal(users.length, 1);
+  assert.equal(users[0].oauth_provider, "google");
+  assert.equal(users[0].oauth_subject, "google-user-456");
+
+  oauthService.exchangeCode = originalExchange;
+  oauthService.validateState = originalValidate;
+});
+
+test("GET /api/auth/oauth/:provider/callback links to existing user by OAuth pair", async function() {
+  clearAuthTables();
+  process.env.GOOGLE_CLIENT_ID = "test-google-id";
+  process.env.GOOGLE_CLIENT_SECRET = "test-google-secret";
+  process.env.OAUTH_REDIRECT_BASE = "https://chatshitbob.com";
+
+  const app = createAuthApp();
+
+  const originalExchange = oauthService.exchangeCode;
+  const originalValidate = oauthService.validateState;
+  oauthService.exchangeCode = async function() {
+    return {
+      provider: "google",
+      subject: "google-user-789",
+      email: "pairuser@example.com",
+      fullName: "Pair User",
+      picture: "",
+      emailVerified: true,
+    };
+  };
+  oauthService.validateState = function() { return true; };
+
+  await invoke(app, "GET", "/api/auth/oauth/google/callback?code=testcode&state=teststate", null, {
+    origin: "https://chatshitbob.com",
+  });
+
+  const res = await invoke(app, "GET", "/api/auth/oauth/google/callback?code=testcode2&state=teststate2", null, {
+    origin: "https://chatshitbob.com",
+  });
+
+  assert.equal(res.statusCode, 200);
+
+  const users = queryJsonParams("SELECT * FROM users WHERE oauth_provider = ? AND oauth_subject = ?", ["google", "google-user-789"]);
+  assert.equal(users.length, 1);
+
+  oauthService.exchangeCode = originalExchange;
+  oauthService.validateState = originalValidate;
+});

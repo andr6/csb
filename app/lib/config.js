@@ -71,6 +71,15 @@ const MAIL_FROM = String(process.env.MAIL_FROM || "").trim();
 
 const SMS_API_KEY = String(process.env.SMS_API_KEY || "").trim();
 
+// ── OAuth configuration ───────────────────────────────────────────────────────
+const GOOGLE_CLIENT_ID = String(process.env.GOOGLE_CLIENT_ID || "").trim();
+const GOOGLE_CLIENT_SECRET = String(process.env.GOOGLE_CLIENT_SECRET || "").trim();
+const FACEBOOK_APP_ID = String(process.env.FACEBOOK_APP_ID || "").trim();
+const FACEBOOK_APP_SECRET = String(process.env.FACEBOOK_APP_SECRET || "").trim();
+const INSTAGRAM_APP_ID = String(process.env.INSTAGRAM_APP_ID || "").trim();
+const INSTAGRAM_APP_SECRET = String(process.env.INSTAGRAM_APP_SECRET || "").trim();
+const OAUTH_REDIRECT_BASE = String(process.env.OAUTH_REDIRECT_BASE || "").trim();
+
 const ADMIN_EMAIL = "admin@csb.local";
 
 const KEYS = {
@@ -197,6 +206,13 @@ module.exports = {
   MAIL_PASS: MAIL_PASS,
   MAIL_FROM: MAIL_FROM,
   SMS_API_KEY: SMS_API_KEY,
+  GOOGLE_CLIENT_ID: GOOGLE_CLIENT_ID,
+  GOOGLE_CLIENT_SECRET: GOOGLE_CLIENT_SECRET,
+  FACEBOOK_APP_ID: FACEBOOK_APP_ID,
+  FACEBOOK_APP_SECRET: FACEBOOK_APP_SECRET,
+  INSTAGRAM_APP_ID: INSTAGRAM_APP_ID,
+  INSTAGRAM_APP_SECRET: INSTAGRAM_APP_SECRET,
+  OAUTH_REDIRECT_BASE: OAUTH_REDIRECT_BASE,
   parseAllowedOrigins: parseAllowedOrigins,
   parsePositiveNumber: parsePositiveNumber,
   parseModelPricing: parseModelPricing,

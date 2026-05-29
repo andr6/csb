@@ -496,6 +496,17 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
 .auth-otp{display:flex;gap:.5rem;justify-content:center;margin-bottom:1rem}
 .auth-otp input{width:3rem;text-align:center;font-size:1.2rem;padding:.5rem;border:1px solid var(--border);background:var(--bg);color:var(--text)}
 .auth-otp input:focus{outline:none;border-color:var(--gold)}
+
+/* OAuth buttons */
+.auth-oauth{margin-top:1.25rem}
+.auth-oauth-sep{display:flex;align-items:center;text-align:center;margin-bottom:1rem;font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}
+.auth-oauth-sep::before,.auth-oauth-sep::after{content:'';flex:1;border-bottom:1px solid var(--border)}
+.auth-oauth-sep span{padding:0 .75rem}
+.auth-oauth-btn{width:100%;padding:.65rem;border:1px solid var(--border2);background:var(--s2);color:var(--text);font-family:'DM Mono',monospace;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;margin-bottom:.5rem;transition:all .15s}
+.auth-oauth-btn:hover{border-color:var(--gold);color:var(--gold)}
+.auth-oauth-btn.google{border-left:3px solid #4285f4}
+.auth-oauth-btn.facebook{border-left:3px solid #1877f2}
+.auth-oauth-btn.instagram{border-left:3px solid #e4405f}
 </style>
 </head>
 <body>
@@ -863,6 +874,12 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
           <div class="auth-error" id="regConfirmError"></div>
         </div>
         <button class="auth-btn" id="regBtn" onclick="handleRegister()">Create Account</button>
+        <div class="auth-oauth" id="authOAuthRegister" style="display:none">
+          <div class="auth-oauth-sep"><span>or</span></div>
+          <button class="auth-oauth-btn google" data-provider="google" onclick="startOAuth('google')">Sign in with Google</button>
+          <button class="auth-oauth-btn facebook" data-provider="facebook" onclick="startOAuth('facebook')">Sign in with Facebook</button>
+          <button class="auth-oauth-btn instagram" data-provider="instagram" onclick="startOAuth('instagram')">Sign in with Instagram</button>
+        </div>
         <div class="auth-switch">Already have an account? <a onclick="showAuthLogin()">Log in</a></div>
       </div>
 
@@ -899,6 +916,12 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
         </div>
         <div class="auth-error" id="loginGeneralError"></div>
         <button class="auth-btn" id="loginBtn" onclick="handleLogin()">Log In</button>
+        <div class="auth-oauth" id="authOAuthLogin" style="display:none">
+          <div class="auth-oauth-sep"><span>or</span></div>
+          <button class="auth-oauth-btn google" data-provider="google" onclick="startOAuth('google')">Sign in with Google</button>
+          <button class="auth-oauth-btn facebook" data-provider="facebook" onclick="startOAuth('facebook')">Sign in with Facebook</button>
+          <button class="auth-oauth-btn instagram" data-provider="instagram" onclick="startOAuth('instagram')">Sign in with Instagram</button>
+        </div>
         <div class="auth-switch">
           <a onclick="showAuthForgotPassword()">Forgot password?</a>
         </div>

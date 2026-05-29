@@ -115,6 +115,32 @@ function createUserRepository() {
     );
   }
 
+  function findByOAuth(provider, subject) {
+    const rows = queryJsonParams(
+      "SELECT * FROM users WHERE oauth_provider = ? AND oauth_subject = ?",
+      [provider, subject]
+    );
+    return rows && rows[0] ? rows[0] : null;
+  }
+
+  function linkOAuth(id, provider, subject) {
+    const now = new Date().toISOString();
+    runSqlParams(
+      "UPDATE users SET oauth_provider = ?, oauth_subject = ?, updated_at = ? WHERE id = ?",
+      [provider, subject, now, id]
+    );
+  }
+
+  function createOAuthUser({ fullName, email, provider, subject }) {
+    const now = new Date().toISOString();
+    runSqlParams(
+      "INSERT INTO users (full_name, email, phone_number, password_hash, email_verified, oauth_provider, oauth_subject, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [fullName, email, "", "", 1, provider, subject, now, now]
+    );
+    const row = queryJsonParams("SELECT id FROM users WHERE oauth_provider = ? AND oauth_subject = ?", [provider, subject]);
+    return row && row[0] ? row[0].id : null;
+  }
+
   return {
     createUser,
     findByEmail,
@@ -131,6 +157,9 @@ function createUserRepository() {
     updatePasswordHash,
     markEmailUnverified,
     markPhoneUnverified,
+    findByOAuth,
+    linkOAuth,
+    createOAuthUser,
   };
 }
 
