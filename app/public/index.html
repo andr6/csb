@@ -106,6 +106,36 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
 .header-link:hover{border-color:var(--gold);color:var(--gold);background:rgba(201,168,76,.08)}
 .header-link--active{border-color:var(--gold);color:var(--gold)}
 
+/* USER MENU */
+.user-menu{position:absolute;top:1rem;right:1.5rem;z-index:10}
+.user-menu-toggle{display:inline-flex;align-items:center;gap:.5rem;padding:.5rem .9rem;border:1px solid var(--border2);background:rgba(15,15,15,.78);color:var(--text);font-family:'DM Mono',monospace;font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;cursor:pointer;transition:all .15s}
+.user-menu-toggle:hover{border-color:var(--gold);color:var(--gold)}
+.user-menu-dropdown{display:none;position:absolute;right:0;top:calc(100% + .4rem);min-width:12rem;border:1px solid var(--border2);background:rgba(15,15,15,.95);padding:.4rem 0}
+.user-menu-dropdown.open{display:block}
+.user-menu-item{display:block;width:100%;padding:.55rem .9rem;border:none;background:none;color:var(--text);font-family:'DM Mono',monospace;font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;text-align:left;cursor:pointer;transition:all .1s}
+.user-menu-item:hover{color:var(--gold);background:rgba(201,168,76,.08)}
+.user-menu-sep{border-top:1px solid var(--border2);margin:.25rem 0}
+
+/* ACCOUNT SETTINGS MODAL */
+.settings-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:200;display:none;align-items:center;justify-content:center}
+.settings-overlay.open{display:flex}
+.settings-card{width:min(520px,92vw);max-height:90vh;overflow-y:auto;border:1px solid var(--border2);background:var(--s1);padding:1.5rem 1.5rem 1rem}
+.settings-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem}
+.settings-title{font-family:'Oswald',sans-serif;font-size:1.1rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold)}
+.settings-close{background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;transition:color .15s}
+.settings-close:hover{color:var(--shit)}
+.settings-section{margin-bottom:1.25rem;padding-bottom:1rem;border-bottom:1px solid var(--border)}
+.settings-section:last-child{border-bottom:none;margin-bottom:0}
+.settings-label{display:block;font-size:.6rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin-bottom:.35rem}
+.settings-input{width:100%;padding:.6rem .75rem;border:1px solid var(--border2);background:var(--s2);color:var(--text);font-family:'DM Mono',monospace;font-size:.72rem}
+.settings-input:focus{outline:none;border-color:var(--gold)}
+.settings-btn{margin-top:.6rem;padding:.55rem 1rem;border:1px solid var(--gold);background:rgba(201,168,76,.12);color:var(--gold);font-family:'DM Mono',monospace;font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;cursor:pointer;transition:all .15s}
+.settings-btn:hover{background:var(--gold);color:#000}
+.settings-msg{font-size:.65rem;margin-top:.4rem;min-height:1.1rem}
+.settings-msg.ok{color:#16a34a}
+.settings-msg.err{color:var(--shit)}
+.settings-hint{font-size:.58rem;color:var(--muted);margin-top:.2rem}
+
 /* MODES */
 .modes{display:flex;margin:2rem 0 0;border:1px solid var(--border);background:rgba(8,8,8,.7);backdrop-filter:blur(8px)}
 .mode-btn{flex:1;background:none;border:none;border-right:1px solid var(--border);color:var(--muted);font-family:'DM Mono',monospace;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;padding:.85rem .5rem;cursor:pointer;transition:all .15s;text-align:center;line-height:1.6}
@@ -476,6 +506,17 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
 
 <div class="wrap">
 
+  <div class="user-menu" id="userMenu" style="display:none">
+    <button class="user-menu-toggle" id="userMenuToggle" onclick="toggleUserMenu()">
+      <span id="userMenuName">user</span> ▼
+    </button>
+    <div class="user-menu-dropdown" id="userMenuDropdown">
+      <button class="user-menu-item" onclick="openAccountSettings()">Account Settings</button>
+      <div class="user-menu-sep"></div>
+      <button class="user-menu-item" onclick="logout()">Log Out</button>
+    </div>
+  </div>
+
   <header class="header">
     <p class="eyebrow">// the ai benchmarking show nobody asked for</p>
 
@@ -494,7 +535,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
     <p class="header-sub">we rank which LLM gave the sh*ttest answer &mdash; so you don't have to</p>
     <div class="header-actions">
       <a class="header-link" id="homeLink" href="/">benchmark arena</a>
-      <button class="header-link" id="logoutBtn" onclick="logout()" style="display:none">log out</button>
+      <button class="header-link" id="adminAnalyticsBtn" onclick="toggleAdminAnalytics()" style="display:none">analytics</button>
     </div>
   </header>
 
@@ -894,6 +935,49 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
         <div class="auth-switch">Didn't receive it? <a onclick="handleResendPhoneOtp()">Resend code</a></div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ACCOUNT SETTINGS MODAL -->
+  <div class="settings-overlay" id="accountSettingsOverlay" onclick="if(event.target===this)closeAccountSettings()">
+    <div class="settings-card">
+      <div class="settings-head">
+        <div class="settings-title">Account Settings</div>
+        <button class="settings-close" onclick="closeAccountSettings()">×</button>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-label">Name or Alias</div>
+        <input type="text" class="settings-input" id="settingsNameInput" placeholder="At least 4 characters">
+        <div class="settings-hint" id="settingsNameHint"></div>
+        <button class="settings-btn" onclick="handleUpdateName()">Update Name</button>
+        <div class="settings-msg" id="settingsNameMsg"></div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-label">Email</div>
+        <input type="email" class="settings-input" id="settingsEmailInput" placeholder="your@email.com">
+        <div class="settings-hint" id="settingsEmailHint">Changing email will require re-verification.</div>
+        <button class="settings-btn" onclick="handleUpdateEmail()">Update Email</button>
+        <div class="settings-msg" id="settingsEmailMsg"></div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-label">Phone Number</div>
+        <input type="tel" class="settings-input" id="settingsPhoneInput" placeholder="+1234567890">
+        <div class="settings-hint" id="settingsPhoneHint">Changing phone will require re-verification.</div>
+        <button class="settings-btn" onclick="handleUpdatePhone()">Update Phone</button>
+        <div class="settings-msg" id="settingsPhoneMsg"></div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-label">Change Password</div>
+        <input type="password" class="settings-input" id="settingsCurrentPassword" placeholder="Current password" style="margin-bottom:.4rem">
+        <input type="password" class="settings-input" id="settingsNewPassword" placeholder="New password (8+ chars, upper, lower, number, special)" style="margin-bottom:.4rem">
+        <input type="password" class="settings-input" id="settingsConfirmPassword" placeholder="Confirm new password">
+        <button class="settings-btn" onclick="handleChangePassword()">Update Password</button>
+        <div class="settings-msg" id="settingsPasswordMsg"></div>
+      </div>
     </div>
   </div>
 

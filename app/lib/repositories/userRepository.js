@@ -83,6 +83,38 @@ function createUserRepository() {
     );
   }
 
+  function updateName(id, fullName) {
+    const now = new Date().toISOString();
+    runSqlParams(
+      "UPDATE users SET full_name = ?, updated_at = ? WHERE id = ?",
+      [fullName, now, id]
+    );
+  }
+
+  function updatePasswordHash(id, passwordHash) {
+    const now = new Date().toISOString();
+    runSqlParams(
+      "UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?",
+      [passwordHash, now, id]
+    );
+  }
+
+  function markEmailUnverified(id) {
+    const now = new Date().toISOString();
+    runSqlParams(
+      "UPDATE users SET email_verified = 0, updated_at = ? WHERE id = ?",
+      [now, id]
+    );
+  }
+
+  function markPhoneUnverified(id) {
+    const now = new Date().toISOString();
+    runSqlParams(
+      "UPDATE users SET phone_verified = 0, custom_mode_access_enabled = 0, updated_at = ? WHERE id = ?",
+      [now, id]
+    );
+  }
+
   return {
     createUser,
     findByEmail,
@@ -95,6 +127,10 @@ function createUserRepository() {
     isAccountLocked,
     updateFirstLogin,
     enableCustomMode,
+    updateName,
+    updatePasswordHash,
+    markEmailUnverified,
+    markPhoneUnverified,
   };
 }
 

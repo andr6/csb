@@ -186,6 +186,7 @@ var _tokenRefreshPromise = null;
 var _activePack = "bar";
 var _packPersonas = {};  // { packId: persona }
 var isAnalyticsPage = window.location.pathname === "/analytics";
+var _showAnalyticsOnIndex = false;
 
 // Refresh the page token from /api/config — deduplicates concurrent callers so
 // 10 parallel fire calls that all hit a 403 share a single config fetch.
@@ -352,14 +353,20 @@ function _continueInit() {
   fetch("/api/config")
     .then(function(r) { return r.json(); })
     .then(function(cfg) {
+      _lastConfig = cfg;
       if (cfg._token) _pageToken = cfg._token;
+      if (cfg.user) {
+        _currentUser = cfg.user;
+        updateAuthUI();
+      }
 
       var tokenHeader = { "X-Page-Token": _pageToken };
+      var shouldLoadAnalytics = isAnalyticsPage || _showAnalyticsOnIndex;
       var requests = [
         fetch("/api/history").then(function(r) { return r.json(); }).catch(function() { return emptyHistoryPayload; }),
-        isAnalyticsPage ? fetch("/api/runs?limit=10").then(function(r) { return r.json(); }).catch(function() { return emptyRunsPayload; }) : Promise.resolve(emptyRunsPayload),
-        isAnalyticsPage ? fetch("/api/failures/summary").then(function(r) { return r.json(); }).catch(function() { return emptyFailurePayload; }) : Promise.resolve(emptyFailurePayload),
-        isAnalyticsPage ? fetch("/api/analytics").then(function(r) { return r.json(); }).catch(function() { return emptyAnalyticsPayload; }) : Promise.resolve(emptyAnalyticsPayload),
+        shouldLoadAnalytics ? fetch("/api/runs?limit=10").then(function(r) { return r.json(); }).catch(function() { return emptyRunsPayload; }) : Promise.resolve(emptyRunsPayload),
+        shouldLoadAnalytics ? fetch("/api/failures/summary").then(function(r) { return r.json(); }).catch(function() { return emptyFailurePayload; }) : Promise.resolve(emptyFailurePayload),
+        shouldLoadAnalytics ? fetch("/api/analytics").then(function(r) { return r.json(); }).catch(function() { return emptyAnalyticsPayload; }) : Promise.resolve(emptyAnalyticsPayload),
         fetch("/api/pack-prompts",  { headers: tokenHeader }).then(function(r) { return r.json(); }).catch(function() { return null; }),
         fetch("/api/mode-prompts",  { headers: tokenHeader }).then(function(r) { return r.json(); }).catch(function() { return null; }),
       ];
@@ -426,7 +433,7 @@ function _continueInit() {
       }
       renderLeaderboard();
       renderAnalytics();
-      if (isAnalyticsPage) {
+      if (isAnalyticsPage || _showAnalyticsOnIndex) {
         populateRunFilter();
         renderSavedViews();
         renderFailureSummary();
@@ -434,7 +441,7 @@ function _continueInit() {
         renderRunsPanel();
         loadModerationPanel();
       }
-      if (isAnalyticsPage && recentRuns[0]) {
+      if ((isAnalyticsPage || _showAnalyticsOnIndex) && recentRuns[0]) {
         inspectRun(recentRuns[0].id);
       }
       // F2 populate versus pickers (only meaningful on main arena page)
@@ -466,7 +473,7 @@ function _continueInit() {
       }
       renderLeaderboard();
       renderAnalytics();
-      if (isAnalyticsPage) {
+      if (isAnalyticsPage || _showAnalyticsOnIndex) {
         populateRunFilter();
         renderSavedViews();
         renderFailureSummary();
@@ -1752,7 +1759,7 @@ function renderLeaderboard() {
 
 function renderAnalytics() {
   var panel = document.getElementById("analyticsPanel");
-  if (!isAnalyticsPage) {
+  if (!isAnalyticsPage && !_showAnalyticsOnIndex) {
     panel.style.display = "none";
     return;
   }
@@ -2065,7 +2072,7 @@ async function refreshHistory() {
 }
 
 async function refreshAnalytics(params) {
-  if (!isAnalyticsPage) return;
+  if (!isAnalyticsPage && !_showAnalyticsOnIndex) return;
   try {
     const res = await fetch("/api/analytics?" + new URLSearchParams(params || {}).toString());
     analyticsSummary = await res.json();
@@ -3051,6 +3058,7 @@ function moderatePrompt(id, action) {
 var _authToken = localStorage.getItem("csb_session_token") || "";
 var _currentUser = null;
 var _pendingEmail = "";
+var _lastConfig = null;
 
 // Intercept fetch to inject auth + page-token headers for all /api/* calls
 var _originalFetch = window.fetch;
@@ -3069,8 +3077,183 @@ window.fetch = function(url, opts) {
 };
 
 function updateAuthUI() {
-  var logoutBtn = document.getElementById("logoutBtn");
-  if (logoutBtn) logoutBtn.style.display = _currentUser ? "inline-flex" : "none";
+  var userMenu = document.getElementById("userMenu");
+  var userMenuName = document.getElementById("userMenuName");
+  var adminAnalyticsBtn = document.getElementById("adminAnalyticsBtn");
+  if (userMenu) userMenu.style.display = _currentUser ? "block" : "none";
+  if (userMenuName && _currentUser) userMenuName.textContent = _currentUser.fullName || _currentUser.email || "user";
+  if (adminAnalyticsBtn) adminAnalyticsBtn.style.display = (_currentUser && _currentUser.isAdmin) ? "inline-flex" : "none";
+}
+
+function toggleUserMenu() {
+  var dropdown = document.getElementById("userMenuDropdown");
+  if (dropdown) dropdown.classList.toggle("open");
+}
+
+function openAccountSettings() {
+  var dropdown = document.getElementById("userMenuDropdown");
+  if (dropdown) dropdown.classList.remove("open");
+  if (!_currentUser) return;
+  document.getElementById("settingsNameInput").value = _currentUser.fullName || "";
+  document.getElementById("settingsEmailInput").value = _currentUser.email || "";
+  // Phone not exposed in /api/auth/me, fetch from config if available
+  var cfg = _lastConfig || {};
+  if (cfg.user && cfg.user.phone) {
+    document.getElementById("settingsPhoneInput").value = cfg.user.phone || "";
+  }
+  // Clear messages
+  ["settingsNameMsg","settingsEmailMsg","settingsPhoneMsg","settingsPasswordMsg"].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) { el.textContent = ""; el.className = "settings-msg"; }
+  });
+  var overlay = document.getElementById("accountSettingsOverlay");
+  if (overlay) overlay.classList.add("open");
+}
+
+function closeAccountSettings() {
+  var overlay = document.getElementById("accountSettingsOverlay");
+  if (overlay) overlay.classList.remove("open");
+}
+
+function setSettingsMsg(id, text, ok) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text || "";
+  el.className = "settings-msg " + (ok ? "ok" : "err");
+}
+
+function handleUpdateName() {
+  var name = String(document.getElementById("settingsNameInput").value || "").trim();
+  if (name.length < 4) {
+    setSettingsMsg("settingsNameMsg", "Name must be at least 4 characters.", false);
+    return;
+  }
+  fetch("/api/auth/update-name", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name }) })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.ok) {
+        setSettingsMsg("settingsNameMsg", "Name updated.", true);
+        if (_currentUser) _currentUser.fullName = name;
+        updateAuthUI();
+      } else {
+        setSettingsMsg("settingsNameMsg", data.error || "Update failed.", false);
+      }
+    })
+    .catch(function() { setSettingsMsg("settingsNameMsg", "Network error.", false); });
+}
+
+function handleUpdateEmail() {
+  var email = String(document.getElementById("settingsEmailInput").value || "").trim().toLowerCase();
+  if (!email || email.indexOf("@") === -1) {
+    setSettingsMsg("settingsEmailMsg", "Please enter a valid email.", false);
+    return;
+  }
+  fetch("/api/auth/update-email", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: email }) })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.ok) {
+        setSettingsMsg("settingsEmailMsg", data.message || "Email updated. Check your inbox for the verification code.", true);
+        if (_currentUser) _currentUser.email = email;
+        _currentUser.emailVerified = false;
+        updateAuthUI();
+      } else {
+        setSettingsMsg("settingsEmailMsg", data.error || "Update failed.", false);
+      }
+    })
+    .catch(function() { setSettingsMsg("settingsEmailMsg", "Network error.", false); });
+}
+
+function handleUpdatePhone() {
+  var phone = String(document.getElementById("settingsPhoneInput").value || "").trim();
+  if (!phone || phone.length < 3) {
+    setSettingsMsg("settingsPhoneMsg", "Please enter a valid phone number with country code.", false);
+    return;
+  }
+  fetch("/api/auth/update-phone", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ phone: phone }) })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.ok) {
+        setSettingsMsg("settingsPhoneMsg", data.message || "Phone updated. Check your SMS for the verification code.", true);
+        _currentUser.phoneVerified = false;
+        _currentUser.customModeEnabled = false;
+        updateAuthUI();
+      } else {
+        setSettingsMsg("settingsPhoneMsg", data.error || "Update failed.", false);
+      }
+    })
+    .catch(function() { setSettingsMsg("settingsPhoneMsg", "Network error.", false); });
+}
+
+function handleChangePassword() {
+  var current = document.getElementById("settingsCurrentPassword").value;
+  var newPass = document.getElementById("settingsNewPassword").value;
+  var confirm = document.getElementById("settingsConfirmPassword").value;
+  if (!current || !newPass) {
+    setSettingsMsg("settingsPasswordMsg", "All password fields are required.", false);
+    return;
+  }
+  if (newPass !== confirm) {
+    setSettingsMsg("settingsPasswordMsg", "New passwords do not match.", false);
+    return;
+  }
+  if (newPass.length < 8 || !/[A-Z]/.test(newPass) || !/[a-z]/.test(newPass) || !/[0-9]/.test(newPass) || !/[^A-Za-z0-9]/.test(newPass)) {
+    setSettingsMsg("settingsPasswordMsg", "Password must be 8+ chars with upper, lower, number, and special character.", false);
+    return;
+  }
+  fetch("/api/auth/change-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ currentPassword: current, newPassword: newPass, confirmPassword: confirm }) })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.ok) {
+        setSettingsMsg("settingsPasswordMsg", "Password updated successfully.", true);
+        document.getElementById("settingsCurrentPassword").value = "";
+        document.getElementById("settingsNewPassword").value = "";
+        document.getElementById("settingsConfirmPassword").value = "";
+      } else {
+        setSettingsMsg("settingsPasswordMsg", data.error || "Password change failed.", false);
+      }
+    })
+    .catch(function() { setSettingsMsg("settingsPasswordMsg", "Network error.", false); });
+}
+
+function toggleAdminAnalytics() {
+  _showAnalyticsOnIndex = !_showAnalyticsOnIndex;
+  var btn = document.getElementById("adminAnalyticsBtn");
+  if (btn) btn.classList.toggle("header-link--active", _showAnalyticsOnIndex);
+  if (_showAnalyticsOnIndex) {
+    refreshAdminAnalytics();
+    injectModerationPanel();
+  } else {
+    setDisplay("analyticsPanel", "none");
+    setDisplay("runsPanel", "none");
+    setDisplay("moderationPanel", "none");
+  }
+}
+
+async function refreshAdminAnalytics() {
+  if (!_showAnalyticsOnIndex && !isAnalyticsPage) return;
+  try {
+    var runsRes = await fetch("/api/runs?limit=10");
+    var runsData = await runsRes.json();
+    recentRuns = Array.isArray(runsData.items) ? runsData.items : [];
+  } catch (e) { recentRuns = []; }
+  try {
+    var failRes = await fetch("/api/failures/summary");
+    failureSummary = await failRes.json();
+  } catch (e) { failureSummary = null; }
+  try {
+    var anRes = await fetch("/api/analytics");
+    analyticsSummary = await anRes.json();
+  } catch (e) { analyticsSummary = null; }
+  renderAnalytics();
+  renderFailureSummary();
+  renderDrilldownBar();
+  renderRunsPanel();
+  if (recentRuns[0]) inspectRun(recentRuns[0].id);
+  try {
+    var driftRes = await fetch("/api/drift");
+    var driftData = await driftRes.json();
+    renderDrift(driftData);
+  } catch (e) { console.warn("Drift refresh failed:", e.message); }
 }
 
 function initAuth() {

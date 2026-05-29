@@ -630,7 +630,7 @@ test("POST /api/auth/update-email changes email for unverified user", async func
   assert.equal(updatedUser.length, 1);
 });
 
-test("POST /api/auth/update-email rejects for already verified user", async function() {
+test("POST /api/auth/update-email allows change for verified user with re-verification", async function() {
   clearAuthTables();
   const app = createAuthApp();
 
@@ -659,8 +659,18 @@ test("POST /api/auth/update-email rejects for already verified user", async func
     authorization: "Bearer " + token,
   });
 
-  assert.equal(res.statusCode, 400);
-  assert.ok(res.body.error.includes("already verified"));
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.ok, true);
+
+  // Email should be updated but marked unverified
+  const updatedUser = queryJsonParams("SELECT * FROM users WHERE email = ?", ["new@example.com"]);
+  assert.equal(updatedUser.length, 1);
+  assert.equal(updatedUser[0].email_verified, 0);
+
+  // Sessions should be invalidated
+  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+  const sessions = queryJsonParams("SELECT * FROM sessions WHERE token_hash = ?", [tokenHash]);
+  assert.equal(sessions.length, 0);
 });
 
 test("POST /api/auth/update-phone changes phone for unverified user", async function() {

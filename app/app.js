@@ -557,6 +557,7 @@ function createApp(overrides) {
             phoneVerified: Boolean(u.phone_verified),
             firstLoginCompleted: Boolean(u.first_login_completed),
             customModeEnabled: Boolean(u.custom_mode_access_enabled),
+            isAdmin: u.email === ADMIN_EMAIL,
           };
         }
       }
@@ -775,6 +776,7 @@ function createApp(overrides) {
         phoneVerified: req.user.phoneVerified,
         firstLoginCompleted: req.user.firstLoginCompleted,
         customModeEnabled: req.user.customModeEnabled,
+        isAdmin: req.user.email === ADMIN_EMAIL,
       },
     });
   });
@@ -848,12 +850,11 @@ function createApp(overrides) {
     res.json({ ok: true, message: "A new verification code has been sent." });
   });
 
-  // ── Update email before verification ────────────────────────────────────────
+  // ── Update email ────────────────────────────────────────────────────────────
   app.post("/api/auth/update-email", authMw.requireAuth, otpResendLimiter, requireKnownOrigin, async function(req, res) {
     const userId = req.user.id;
     const user = userRepo.findById(userId);
     if (!user) return res.status(404).json({ error: "User not found." });
-    if (user.email_verified) return res.status(400).json({ error: "Email already verified." });
 
     const newEmail = String(req.body.email || "").trim().toLowerCase();
     if (!authService.validateEmail(newEmail)) {
@@ -868,7 +869,15 @@ function createApp(overrides) {
     runSqlParams("UPDATE users SET email = ?, updated_at = ? WHERE id = ?", [newEmail, new Date().toISOString(), userId]);
     console.log(JSON.stringify({ type: "security", event: "email_updated", userId: userId }));
 
-    // Send new email OTP
+    // If user was already verified, mark unverified and require re-validation
+    if (user.email_verified) {
+      userRepo.markEmailUnverified(userId);
+      // Invalidate all existing sessions so user must re-verify
+      sessionRepo.deleteByUser(userId);
+      console.log(JSON.stringify({ type: "security", event: "email_unverified_for_change", userId: userId }));
+    }
+
+    // Send email OTP
     otpRepo.pruneExpired();
     const otp = authService.generateOtp();
     const otpHash = authService.hashOtp(otp);
@@ -876,15 +885,14 @@ function createApp(overrides) {
     otpRepo.createOtp({ userId, type: "email_verification", hash: otpHash, expiresAt });
     await sendEmailOtp(newEmail, otp);
 
-    res.json({ ok: true, message: "Email updated. A new verification code has been sent." });
+    res.json({ ok: true, message: "Email updated. A verification code has been sent to confirm the new address." });
   });
 
-  // ── Update phone before verification ────────────────────────────────────────
+  // ── Update phone ──────────────────────────────────────────────────────────────
   app.post("/api/auth/update-phone", authMw.requireAuth, otpResendLimiter, requireKnownOrigin, async function(req, res) {
     const userId = req.user.id;
     const user = userRepo.findById(userId);
     if (!user) return res.status(404).json({ error: "User not found." });
-    if (user.phone_verified) return res.status(400).json({ error: "Phone already verified." });
 
     const newPhone = String(req.body.phone || "").trim();
     if (!authService.validatePhone(newPhone)) {
@@ -895,7 +903,13 @@ function createApp(overrides) {
     runSqlParams("UPDATE users SET phone_number = ?, updated_at = ? WHERE id = ?", [normalizedPhone, new Date().toISOString(), userId]);
     console.log(JSON.stringify({ type: "security", event: "phone_updated", userId: userId }));
 
-    // Send new phone OTP
+    // If user was already verified, mark unverified and require re-validation
+    if (user.phone_verified) {
+      userRepo.markPhoneUnverified(userId);
+      console.log(JSON.stringify({ type: "security", event: "phone_unverified_for_change", userId: userId }));
+    }
+
+    // Send phone OTP
     otpRepo.pruneExpired();
     const otp = authService.generateOtp();
     const otpHash = authService.hashOtp(otp);
@@ -903,7 +917,67 @@ function createApp(overrides) {
     otpRepo.createOtp({ userId, type: "phone_verification", hash: otpHash, expiresAt });
     await sendSmsOtp(normalizedPhone, otp);
 
-    res.json({ ok: true, message: "Phone updated. A new verification code has been sent." });
+    res.json({ ok: true, message: "Phone updated. A verification code has been sent to confirm the new number." });
+  });
+
+  // ── Change password ─────────────────────────────────────────────────────────
+  app.post("/api/auth/change-password", authMw.requireAuth, otpResendLimiter, requireKnownOrigin, async function(req, res) {
+    const userId = req.user.id;
+    const user = userRepo.findById(userId);
+    if (!user) return res.status(404).json({ error: "User not found." });
+
+    const currentPassword = String(req.body.currentPassword || "");
+    const newPassword = String(req.body.newPassword || "");
+    const confirmPassword = String(req.body.confirmPassword || "");
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: "Current password and new password are required." });
+    }
+    if (!authService.validatePasswordPolicy(newPassword)) {
+      return res.status(400).json({ error: authService.getPasswordPolicyError() });
+    }
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ error: "New passwords do not match." });
+    }
+
+    const valid = await authService.verifyPassword(currentPassword, user.password_hash);
+    if (!valid) {
+      return res.status(400).json({ error: "Current password is incorrect." });
+    }
+
+    const passwordHash = await authService.hashPassword(newPassword);
+    userRepo.updatePasswordHash(userId, passwordHash);
+    // Invalidate all sessions except current
+    const authHeader = String(req.headers.authorization || "");
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+    if (token) {
+      const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+      sessionRepo.deleteByUser(userId);
+      // Re-create current session
+      const sessionExpiry = authService.getSessionExpiryDate();
+      sessionRepo.createSession({ userId, tokenHash, expiresAt: sessionExpiry });
+    } else {
+      sessionRepo.deleteByUser(userId);
+    }
+
+    console.log(JSON.stringify({ type: "security", event: "password_changed", userId: userId }));
+    res.json({ ok: true, message: "Password updated successfully." });
+  });
+
+  // ── Update name ─────────────────────────────────────────────────────────────
+  app.post("/api/auth/update-name", authMw.requireAuth, otpResendLimiter, requireKnownOrigin, async function(req, res) {
+    const userId = req.user.id;
+    const user = userRepo.findById(userId);
+    if (!user) return res.status(404).json({ error: "User not found." });
+
+    const newName = String(req.body.name || "").trim();
+    if (!authService.validateName(newName)) {
+      return res.status(400).json({ error: authService.getNamePolicyError() });
+    }
+
+    userRepo.updateName(userId, newName);
+    console.log(JSON.stringify({ type: "security", event: "name_updated", userId: userId }));
+    res.json({ ok: true, message: "Name updated successfully.", name: newName });
   });
 
   // ── Forgot password ───────────────────────────────────────────────────────
