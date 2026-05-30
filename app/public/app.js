@@ -827,17 +827,18 @@ function buildSymptoms(symptoms) {
 function buildLeaderboardRow(entry, rank) {
   var m = MODELS.find(function(x){return x.id===entry.modelId;});
   var t = shitTier(entry.score);
-  var wrapper = document.createElement("details");
-  wrapper.className = "lb-entry";
-  wrapper.open = true;
 
-  var row = document.createElement("summary");
-  row.className = "lb-row";
+  var wrapper = document.createElement("div");
+  wrapper.className = "lb-entry";
+
+  // ── Header row: rank | model | score ──
+  var header = document.createElement("div");
+  header.className = "lb-header";
 
   var rankEl = document.createElement("span");
   rankEl.className = "lb-rank";
   rankEl.textContent = "#" + rank;
-  row.appendChild(rankEl);
+  header.appendChild(rankEl);
 
   var metaEl = document.createElement("div");
   metaEl.className = "lb-meta";
@@ -853,65 +854,58 @@ function buildLeaderboardRow(entry, rank) {
   makerEl.textContent = m ? m.maker : "Unknown";
   metaEl.appendChild(makerEl);
 
-  row.appendChild(metaEl);
+  header.appendChild(metaEl);
 
   if (entry.createdAt) {
     var timeEl = document.createElement("span");
     timeEl.className = "lb-time";
-    timeEl.style.fontSize = ".65rem";
-    timeEl.style.color = "var(--muted)";
-    timeEl.style.whiteSpace = "nowrap";
     try {
       timeEl.textContent = new Date(entry.createdAt).toISOString().replace("T"," ").slice(0,19) + " UTC";
     } catch (_) {
       timeEl.textContent = String(entry.createdAt);
     }
-    row.appendChild(timeEl);
+    header.appendChild(timeEl);
   }
-
-  var promptEl = document.createElement("span");
-  promptEl.className = "lb-prompt";
-  promptEl.textContent = '"' + entry.prompt.slice(0,55) + (entry.prompt.length > 55 ? "..." : "") + '"';
-  row.appendChild(promptEl);
 
   var scoreEl = document.createElement("span");
   scoreEl.className = "lb-score";
   scoreEl.style.color = t.color;
   scoreEl.textContent = entry.score + "%";
-  row.appendChild(scoreEl);
+  header.appendChild(scoreEl);
 
-  var toggleEl = document.createElement("span");
-  toggleEl.className = "lb-toggle";
-  toggleEl.textContent = "+";
-  row.appendChild(toggleEl);
+  // ── Body: prompt + answer preview (always visible) ──
+  var body = document.createElement("div");
+  body.className = "lb-body";
 
-  var panel = document.createElement("div");
-  panel.className = "lb-panel";
-
-  var questionLabel = document.createElement("span");
-  questionLabel.className = "lb-panel-label";
-  questionLabel.textContent = "Question";
-  panel.appendChild(questionLabel);
-
-  var questionCopy = document.createElement("div");
-  questionCopy.className = "lb-panel-copy";
-  questionCopy.textContent = entry.prompt || "";
-  panel.appendChild(questionCopy);
+  var promptRow = document.createElement("div");
+  promptRow.className = "lb-prompt-row";
+  var promptLabel = document.createElement("span");
+  promptLabel.className = "lb-body-label";
+  promptLabel.textContent = "TRIGGER";
+  promptRow.appendChild(promptLabel);
+  var promptText = document.createElement("span");
+  promptText.className = "lb-prompt-text";
+  promptText.textContent = entry.prompt || "";
+  promptRow.appendChild(promptText);
+  body.appendChild(promptRow);
 
   if (entry.answer) {
+    var answerRow = document.createElement("div");
+    answerRow.className = "lb-answer-row";
     var answerLabel = document.createElement("span");
-    answerLabel.className = "lb-panel-label";
-    answerLabel.textContent = "Worst Answer";
-    panel.appendChild(answerLabel);
-
-    var answerCopy = document.createElement("div");
-    answerCopy.className = "lb-panel-copy";
-    answerCopy.textContent = entry.answer;
-    panel.appendChild(answerCopy);
+    answerLabel.className = "lb-body-label";
+    answerLabel.textContent = "BEGINNING";
+    answerRow.appendChild(answerLabel);
+    var answerText = document.createElement("span");
+    answerText.className = "lb-answer-text";
+    var preview = entry.answer.slice(0, 180);
+    answerText.textContent = preview + (entry.answer.length > 180 ? "..." : "");
+    answerRow.appendChild(answerText);
+    body.appendChild(answerRow);
   }
 
-  wrapper.appendChild(row);
-  wrapper.appendChild(panel);
+  wrapper.appendChild(header);
+  wrapper.appendChild(body);
   return wrapper;
 }
 
