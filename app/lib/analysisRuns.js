@@ -10,6 +10,14 @@ const {
   computeBlindAlignment,
   computePromptTopics,
   computeCostForecast,
+  computePromptDifficulty,
+  computeHeadToHead,
+  computeScoreVolatility,
+  computeContestantLatency,
+  computeUpsets,
+  computeUserEngagement,
+  computeRetryRecovery,
+  computePromptLengthVsScore,
 } = require("./analyticsEngine");
 const {
   MODEL_MAP,
@@ -486,6 +494,46 @@ function getCostForecast(options) {
   return computeCostForecast(enriched.dailyTrend, enriched.budget);
 }
 
+function getPromptDifficulty(options) {
+  const rows = runRepository.listRecent ? runRepository.listRecent(Object.assign({}, options, { limit: 500 })) : [];
+  return { items: computePromptDifficulty(rows) };
+}
+
+function getHeadToHead(options) {
+  const rows = runRepository.listRecent ? runRepository.listRecent(Object.assign({}, options, { limit: 500 })) : [];
+  return { items: computeHeadToHead(rows) };
+}
+
+function getScoreVolatility(options) {
+  const rows = runRepository.listRecent ? runRepository.listRecent(Object.assign({}, options, { limit: 500 })) : [];
+  return { items: computeScoreVolatility(rows) };
+}
+
+function getContestantLatency(options) {
+  const rows = runRepository.listRecent ? runRepository.listRecent(Object.assign({}, options, { limit: 500 })) : [];
+  return { items: computeContestantLatency(rows) };
+}
+
+function getUpsets(options) {
+  const rows = runRepository.listRecent ? runRepository.listRecent(Object.assign({}, options, { limit: 500 })) : [];
+  return { items: computeUpsets(rows) };
+}
+
+function getUserEngagement(options) {
+  const rows = runRepository.listRecent ? runRepository.listRecent(Object.assign({}, options, { limit: 500 })) : [];
+  return computeUserEngagement(rows);
+}
+
+function getRetryRecovery(options) {
+  const rows = runRepository.listRecent ? runRepository.listRecent(Object.assign({}, options, { limit: 500 })) : [];
+  return computeRetryRecovery(rows);
+}
+
+function getPromptLengthVsScore(options) {
+  const rows = runRepository.listRecent ? runRepository.listRecent(Object.assign({}, options, { limit: 500 })) : [];
+  return { items: computePromptLengthVsScore(rows) };
+}
+
 module.exports = {
   addAnalysisRun: addAnalysisRun,
   listTopAnalysisRunsByScore: listTopAnalysisRunsByScore,
@@ -498,6 +546,14 @@ module.exports = {
   getBlindAlignment: getBlindAlignment,
   getPromptTopics: getPromptTopics,
   getCostForecast: getCostForecast,
+  getPromptDifficulty: getPromptDifficulty,
+  getHeadToHead: getHeadToHead,
+  getScoreVolatility: getScoreVolatility,
+  getContestantLatency: getContestantLatency,
+  getUpsets: getUpsets,
+  getUserEngagement: getUserEngagement,
+  getRetryRecovery: getRetryRecovery,
+  getPromptLengthVsScore: getPromptLengthVsScore,
   listAnalysisRuns: listAnalysisRuns,
   countAnalysisRuns: countAnalysisRuns,
   getAnalysisRun: getAnalysisRun,

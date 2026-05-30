@@ -1490,6 +1490,32 @@ function createApp(overrides) {
     res.json(analysisRunServices.getCostForecast(buildRunFilters(req.query)));
   });
 
+  // Phase 2 analytics endpoints
+  app.get("/api/analytics/prompt-difficulty", authMw.requireAuth, analyticsAuth, function(req, res) {
+    res.json(analysisRunServices.getPromptDifficulty(buildRunFilters(req.query)));
+  });
+  app.get("/api/analytics/head-to-head", authMw.requireAuth, analyticsAuth, function(req, res) {
+    res.json(analysisRunServices.getHeadToHead(buildRunFilters(req.query)));
+  });
+  app.get("/api/analytics/score-volatility", authMw.requireAuth, analyticsAuth, function(req, res) {
+    res.json(analysisRunServices.getScoreVolatility(buildRunFilters(req.query)));
+  });
+  app.get("/api/analytics/contestant-latency", authMw.requireAuth, analyticsAuth, function(req, res) {
+    res.json(analysisRunServices.getContestantLatency(buildRunFilters(req.query)));
+  });
+  app.get("/api/analytics/upsets", authMw.requireAuth, analyticsAuth, function(req, res) {
+    res.json(analysisRunServices.getUpsets(buildRunFilters(req.query)));
+  });
+  app.get("/api/analytics/user-engagement", authMw.requireAuth, analyticsAuth, function(req, res) {
+    res.json(analysisRunServices.getUserEngagement(buildRunFilters(req.query)));
+  });
+  app.get("/api/analytics/retry-recovery", authMw.requireAuth, analyticsAuth, function(req, res) {
+    res.json(analysisRunServices.getRetryRecovery(buildRunFilters(req.query)));
+  });
+  app.get("/api/analytics/prompt-length-vs-score", authMw.requireAuth, analyticsAuth, function(req, res) {
+    res.json(analysisRunServices.getPromptLengthVsScore(buildRunFilters(req.query)));
+  });
+
   // F8 — daily challenge trigger
   app.post("/api/challenge", authMw.requireAuth, analyticsAuth, async function(req, res) {
     const prompt = DAILY_CHALLENGE_PROMPT || (req.body && req.body.prompt) || "";

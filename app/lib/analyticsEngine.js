@@ -554,6 +554,306 @@ function computeCostForecast(dailyTrend, budgets) {
   };
 }
 
+function computePromptDifficulty(rows) {
+  const promptMap = {};
+  rows.forEach(function(run) {
+    const prompt = String(run.prompt || "").trim();
+    if (!prompt) return;
+    if (!promptMap[prompt]) {
+      promptMap[prompt] = { prompt: prompt, runs: 0, successRuns: 0, failures: 0, crownScoreTotal: 0, crownScoreCount: 0, modelCount: 0 };
+    }
+    const s = promptMap[prompt];
+    s.runs += 1;
+    const status = run.execution && run.execution.summary && run.execution.summary.overallStatus || "unknown";
+    if (status === "success") s.successRuns += 1;
+    else if (status !== "unknown") s.failures += 1;
+    if (run.crownModelId) {
+      s.crownScoreTotal += Number(run.crownScore || 0);
+      s.crownScoreCount += 1;
+    }
+    const responses = run.responses && typeof run.responses === "object" ? run.responses : {};
+    s.modelCount = Math.max(s.modelCount, Object.keys(responses).length);
+  });
+  return Object.keys(promptMap).map(function(key) {
+    const s = promptMap[key];
+    return {
+      prompt: s.prompt.length > 80 ? s.prompt.slice(0, 80) + "..." : s.prompt,
+      runs: s.runs,
+      successRate: s.runs ? Math.round((s.successRuns / s.runs) * 100) : 0,
+      avgCrownScore: s.crownScoreCount ? Math.round(s.crownScoreTotal / s.crownScoreCount) : 0,
+      failureRate: s.runs ? Math.round((s.failures / s.runs) * 100) : 0,
+      modelCount: s.modelCount,
+    };
+  }).sort(function(a, b) { return a.avgCrownScore - b.avgCrownScore || b.failureRate - a.failureRate; });
+}
+
+function computeHeadToHead(rows) {
+  const pairMap = {};
+  const modelWins = {};
+  const modelAppearances = {};
+
+  rows.forEach(function(run) {
+    const responses = run.responses && typeof run.responses === "object" ? run.responses : {};
+    const modelIds = Object.keys(responses);
+    if (!run.crownModelId || modelIds.length < 2) return;
+    modelIds.forEach(function(mId) {
+      modelAppearances[mId] = (modelAppearances[mId] || 0) + 1;
+      if (mId === run.crownModelId) {
+        modelWins[mId] = (modelWins[mId] || 0) + 1;
+      }
+    });
+    modelIds.forEach(function(a) {
+      modelIds.forEach(function(b) {
+        if (a >= b) return;
+        const key = a + "::" + b;
+        if (!pairMap[key]) pairMap[key] = { a: a, b: b, aWins: 0, bWins: 0, total: 0 };
+        pairMap[key].total += 1;
+        if (run.crownModelId === a) pairMap[key].aWins += 1;
+        else if (run.crownModelId === b) pairMap[key].bWins += 1;
+      });
+    });
+  });
+
+  return Object.keys(pairMap).map(function(key) {
+    const p = pairMap[key];
+    const aWinRate = p.total ? Math.round((p.aWins / p.total) * 100) : 0;
+    const bWinRate = p.total ? Math.round((p.bWins / p.total) * 100) : 0;
+    const aOverall = modelAppearances[p.a] ? Math.round((modelWins[p.a] / modelAppearances[p.a]) * 100) : 0;
+    const bOverall = modelAppearances[p.b] ? Math.round((modelWins[p.b] / modelAppearances[p.b]) * 100) : 0;
+    return {
+      modelA: p.a,
+      modelB: p.b,
+      aWins: p.aWins,
+      bWins: p.bWins,
+      total: p.total,
+      aWinRate: aWinRate,
+      bWinRate: bWinRate,
+      aOverallWinRate: aOverall,
+      bOverallWinRate: bOverall,
+      edge: aWinRate > bWinRate ? p.a : (bWinRate > aWinRate ? p.b : ""),
+    };
+  }).sort(function(a, b) { return b.total - a.total; });
+}
+
+function computeScoreVolatility(rows) {
+  const modelMap = {};
+  rows.forEach(function(run) {
+    const scores = run.judgement && run.judgement.scores ? run.judgement.scores : {};
+    Object.keys(scores).forEach(function(modelId) {
+      if (!modelMap[modelId]) modelMap[modelId] = { modelId: modelId, scores: [], wins: 0, appearances: 0 };
+      const s = modelMap[modelId];
+      const score = Number(scores[modelId] || 0);
+      s.scores.push(score);
+      s.appearances += 1;
+      if (run.crownModelId === modelId) s.wins += 1;
+    });
+  });
+  return Object.keys(modelMap).map(function(modelId) {
+    const s = modelMap[modelId];
+    const n = s.scores.length;
+    const mean = n ? s.scores.reduce(function(a, b) { return a + b; }, 0) / n : 0;
+    const variance = n > 1
+      ? s.scores.reduce(function(a, b) { return a + Math.pow(b - mean, 2); }, 0) / n
+      : 0;
+    const stdDev = Math.round(Math.sqrt(variance) * 10) / 10;
+    return {
+      modelId: s.modelId,
+      appearances: s.appearances,
+      avgScore: Math.round(mean),
+      stdDev: stdDev,
+      minScore: n ? Math.min.apply(null, s.scores) : 0,
+      maxScore: n ? Math.max.apply(null, s.scores) : 0,
+      winRate: s.appearances ? Math.round((s.wins / s.appearances) * 100) : 0,
+    };
+  }).sort(function(a, b) { return b.stdDev - a.stdDev; });
+}
+
+function computeContestantLatency(rows) {
+  const modelMap = {};
+  rows.forEach(function(run) {
+    const timings = run.timings && typeof run.timings === "object" ? run.timings : {};
+    const contestantMs = timings.contestantMsByModel || {};
+    Object.keys(contestantMs).forEach(function(modelId) {
+      if (!modelMap[modelId]) {
+        modelMap[modelId] = { modelId: modelId, totalMs: 0, count: 0, minMs: Infinity, maxMs: 0 };
+      }
+      const ms = Number(contestantMs[modelId] || 0);
+      if (ms <= 0) return;
+      const s = modelMap[modelId];
+      s.totalMs += ms;
+      s.count += 1;
+      if (ms < s.minMs) s.minMs = ms;
+      if (ms > s.maxMs) s.maxMs = ms;
+    });
+  });
+  return Object.keys(modelMap).map(function(modelId) {
+    const s = modelMap[modelId];
+    return {
+      modelId: s.modelId,
+      avgMs: s.count ? Math.round(s.totalMs / s.count) : 0,
+      minMs: s.minMs === Infinity ? 0 : s.minMs,
+      maxMs: s.maxMs,
+      count: s.count,
+    };
+  }).sort(function(a, b) { return b.avgMs - a.avgMs; });
+}
+
+function computeUpsets(rows) {
+  const modelWins = {};
+  const modelAppearances = {};
+  rows.forEach(function(run) {
+    const responses = run.responses && typeof run.responses === "object" ? run.responses : {};
+    Object.keys(responses).forEach(function(mId) {
+      modelAppearances[mId] = (modelAppearances[mId] || 0) + 1;
+      if (run.crownModelId === mId) {
+        modelWins[mId] = (modelWins[mId] || 0) + 1;
+      }
+    });
+  });
+
+  const upsetRuns = [];
+  rows.forEach(function(run) {
+    const responses = run.responses && typeof run.responses === "object" ? run.responses : {};
+    const modelIds = Object.keys(responses);
+    if (!run.crownModelId || modelIds.length < 2) return;
+    const winner = run.crownModelId;
+    const winnerRate = modelAppearances[winner] ? (modelWins[winner] || 0) / modelAppearances[winner] : 0;
+    let biggestUnderdog = null;
+    let biggestGap = -1;
+    modelIds.forEach(function(mId) {
+      if (mId === winner) return;
+      const rate = modelAppearances[mId] ? (modelWins[mId] || 0) / modelAppearances[mId] : 0;
+      const gap = rate - winnerRate;
+      if (gap > biggestGap) {
+        biggestGap = gap;
+        biggestUnderdog = mId;
+      }
+    });
+    if (biggestUnderdog && biggestGap > 0.05) {
+      upsetRuns.push({
+        prompt: String(run.prompt || "").slice(0, 100),
+        winner: winner,
+        loser: biggestUnderdog,
+        winnerRate: Math.round(winnerRate * 100),
+        loserRate: Math.round(((modelWins[biggestUnderdog] || 0) / modelAppearances[biggestUnderdog]) * 100),
+        crownScore: Number(run.crownScore || 0),
+        createdAt: run.createdAt,
+      });
+    }
+  });
+  return upsetRuns.sort(function(a, b) {
+    return (b.loserRate - b.winnerRate) - (a.loserRate - a.winnerRate);
+  }).slice(0, 20);
+}
+
+function computeUserEngagement(rows) {
+  const voterMap = {};
+  let totalVotes = 0;
+  let voteDays = {};
+  rows.forEach(function(run) {
+    const userVotes = run.execution && run.execution.userVotes ? run.execution.userVotes : {};
+    Object.keys(userVotes).forEach(function(voterId) {
+      totalVotes += 1;
+      voterMap[voterId] = (voterMap[voterId] || 0) + 1;
+      const day = String(run.createdAt || "").slice(0, 10);
+      if (day) voteDays[day] = (voteDays[day] || 0) + 1;
+    });
+  });
+  const voterEntries = Object.keys(voterMap).map(function(id) {
+    return { voterId: id, votes: voterMap[id] };
+  }).sort(function(a, b) { return b.votes - a.votes; });
+  const dayEntries = Object.keys(voteDays).sort().map(function(day) {
+    return { date: day, votes: voteDays[day] };
+  });
+  return {
+    totalVotes: totalVotes,
+    uniqueVoters: Object.keys(voterMap).length,
+    topVoters: voterEntries.slice(0, 5),
+    dailyVotes: dayEntries.slice(-7),
+    avgVotesPerVoter: voterEntries.length ? Math.round((totalVotes / voterEntries.length) * 10) / 10 : 0,
+  };
+}
+
+function computeRetryRecovery(rows) {
+  let totalFailed = 0;
+  let totalRecovered = 0;
+  let totalRetried = 0;
+  let totalFallback = 0;
+  const byPolicy = {};
+
+  rows.forEach(function(run) {
+    const execution = run.execution || {};
+    const models = execution.models || {};
+    const policy = execution.policy || {};
+    let runFailed = false;
+    let runRecovered = false;
+    let runRetried = false;
+    let runFallback = false;
+
+    Object.keys(models).forEach(function(mId) {
+      const m = models[mId];
+      if (!m) return;
+      if (m.status !== "success") {
+        runFailed = true;
+        if (m.retryCount) { runRetried = true; totalRetried += 1; }
+        if (m.fallbackUsed) { runFallback = true; totalFallback += 1; }
+      }
+    });
+
+    const overall = execution.summary && execution.summary.overallStatus || "";
+    if (runFailed && overall === "success") {
+      runRecovered = true;
+      totalRecovered += 1;
+    }
+    if (runFailed) {
+      totalFailed += 1;
+      const pKey = (policy.retry || "none") + " / " + (policy.fallback || "none");
+      if (!byPolicy[pKey]) byPolicy[pKey] = { policy: pKey, failed: 0, recovered: 0 };
+      byPolicy[pKey].failed += 1;
+      if (runRecovered) byPolicy[pKey].recovered += 1;
+    }
+  });
+
+  return {
+    totalFailed: totalFailed,
+    totalRecovered: totalRecovered,
+    totalRetried: totalRetried,
+    totalFallback: totalFallback,
+    recoveryRate: totalFailed ? Math.round((totalRecovered / totalFailed) * 100) : 0,
+    byPolicy: Object.keys(byPolicy).map(function(k) {
+      const p = byPolicy[k];
+      return { policy: p.policy, failed: p.failed, recovered: p.recovered, recoveryRate: p.failed ? Math.round((p.recovered / p.failed) * 100) : 0 };
+    }).sort(function(a, b) { return b.failed - a.failed; }),
+  };
+}
+
+function computePromptLengthVsScore(rows) {
+  const lengthBuckets = [
+    { label: "0-50 chars", min: 0, max: 50, runs: 0, scoreTotal: 0, scoreCount: 0 },
+    { label: "51-100 chars", min: 51, max: 100, runs: 0, scoreTotal: 0, scoreCount: 0 },
+    { label: "101-200 chars", min: 101, max: 200, runs: 0, scoreTotal: 0, scoreCount: 0 },
+    { label: "201-400 chars", min: 201, max: 400, runs: 0, scoreTotal: 0, scoreCount: 0 },
+    { label: "400+ chars", min: 401, max: Infinity, runs: 0, scoreTotal: 0, scoreCount: 0 },
+  ];
+  rows.forEach(function(run) {
+    const len = String(run.prompt || "").length;
+    const bucket = lengthBuckets.find(function(b) { return len >= b.min && len <= b.max; });
+    if (!bucket) return;
+    bucket.runs += 1;
+    if (run.crownModelId) {
+      bucket.scoreTotal += Number(run.crownScore || 0);
+      bucket.scoreCount += 1;
+    }
+  });
+  return lengthBuckets.map(function(b) {
+    return {
+      label: b.label,
+      runs: b.runs,
+      avgCrownScore: b.scoreCount ? Math.round(b.scoreTotal / b.scoreCount) : 0,
+    };
+  }).filter(function(b) { return b.runs > 0; });
+}
+
 module.exports = {
   computeAnalyticsSummary,
   computeFailureSummary,
@@ -566,5 +866,13 @@ module.exports = {
   computeBlindAlignment,
   computePromptTopics,
   computeCostForecast,
+  computePromptDifficulty,
+  computeHeadToHead,
+  computeScoreVolatility,
+  computeContestantLatency,
+  computeUpsets,
+  computeUserEngagement,
+  computeRetryRecovery,
+  computePromptLengthVsScore,
   RESPONSE_PATTERNS,
 };
