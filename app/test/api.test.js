@@ -187,6 +187,8 @@ test("POST /api/judge returns normalized verdict payload", async function() {
       contestantMsByModel: { alpha: 101, beta: 202 },
       judgeMs: 99,
     },
+    pack: "bar",
+    mode: "absurd",
     execution: {
       summary: { overallStatus: "partial_failure" },
       models: {

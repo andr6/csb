@@ -368,6 +368,15 @@ function _continueInit() {
         shouldLoadAnalytics ? fetch("/api/analytics").then(function(r) { return r.json(); }).catch(function() { return emptyAnalyticsPayload; }) : Promise.resolve(emptyAnalyticsPayload),
         fetch("/api/pack-prompts",  { headers: tokenHeader }).then(function(r) { return r.json(); }).catch(function() { return null; }),
         fetch("/api/mode-prompts",  { headers: tokenHeader }).then(function(r) { return r.json(); }).catch(function() { return null; }),
+        shouldLoadAnalytics ? fetch("/api/analytics/packs").then(function(r) { return r.json(); }).catch(function() { return { items: [] }; }) : Promise.resolve({ items: [] }),
+        shouldLoadAnalytics ? fetch("/api/analytics/modes").then(function(r) { return r.json(); }).catch(function() { return { items: [] }; }) : Promise.resolve({ items: [] }),
+        shouldLoadAnalytics ? fetch("/api/analytics/providers").then(function(r) { return r.json(); }).catch(function() { return { items: [] }; }) : Promise.resolve({ items: [] }),
+        shouldLoadAnalytics ? fetch("/api/analytics/response-lengths").then(function(r) { return r.json(); }).catch(function() { return { items: [] }; }) : Promise.resolve({ items: [] }),
+        shouldLoadAnalytics ? fetch("/api/analytics/win-streaks").then(function(r) { return r.json(); }).catch(function() { return { items: [] }; }) : Promise.resolve({ items: [] }),
+        shouldLoadAnalytics ? fetch("/api/analytics/blind-alignment").then(function(r) { return r.json(); }).catch(function() { return { totalVotes: 0, alignedVotes: 0, alignmentPct: 0 }; }) : Promise.resolve({ totalVotes: 0, alignedVotes: 0, alignmentPct: 0 }),
+        shouldLoadAnalytics ? fetch("/api/analytics/prompt-topics").then(function(r) { return r.json(); }).catch(function() { return { items: [] }; }) : Promise.resolve({ items: [] }),
+        shouldLoadAnalytics ? fetch("/api/analytics/cost-forecast").then(function(r) { return r.json(); }).catch(function() { return null; }) : Promise.resolve(null),
+        shouldLoadAnalytics ? fetch("/api/patterns").then(function(r) { return r.json(); }).catch(function() { return { items: [] }; }) : Promise.resolve({ items: [] }),
       ];
 
       return Promise.all(requests).then(function(results) {
@@ -383,6 +392,15 @@ function _continueInit() {
       var analyticsPayload = results[3];
       var packPayload = results[4];
       var modePayload = results[5];
+      var packStatsPayload = results[6];
+      var modeStatsPayload = results[7];
+      var providerHealthPayload = results[8];
+      var responseLengthsPayload = results[9];
+      var winStreaksPayload = results[10];
+      var blindAlignmentPayload = results[11];
+      var promptTopicsPayload = results[12];
+      var costForecastPayload = results[13];
+      var patternStatsPayload = results[14];
       if (packPayload) {
         if (packPayload.rage)     CURATED.rage    = packPayload.rage;
         if (packPayload.absurd)   CURATED.absurd  = packPayload.absurd || CURATED.absurd;
@@ -432,7 +450,17 @@ function _continueInit() {
         renderRandomStrip();
       }
       renderLeaderboard();
-      renderAnalytics();
+      renderAnalytics({
+        packStats: packStatsPayload,
+        modeStats: modeStatsPayload,
+        providerHealth: providerHealthPayload,
+        responseLengths: responseLengthsPayload,
+        winStreaks: winStreaksPayload,
+        blindAlignment: blindAlignmentPayload,
+        promptTopics: promptTopicsPayload,
+        costForecast: costForecastPayload,
+        patternStats: patternStatsPayload,
+      });
       if (isAnalyticsPage || _showAnalyticsOnIndex) {
         populateRunFilter();
         renderSavedViews();
@@ -472,7 +500,7 @@ function _continueInit() {
         renderRandomStrip();
       }
       renderLeaderboard();
-      renderAnalytics();
+      renderAnalytics({});
       if (isAnalyticsPage || _showAnalyticsOnIndex) {
         populateRunFilter();
         renderSavedViews();
@@ -1204,7 +1232,7 @@ async function judgeResponses(prompt, allResponses, modelsOverride, _isRetry) {
       prompt: prompt,
       responses: anonResponses,
       meta: metaBase,
-    }, getActiveCriteria() ? {criteria: getActiveCriteria()} : {}, {pack: _activePack})),
+    }, getActiveCriteria() ? {criteria: getActiveCriteria()} : {}, {pack: _activePack, mode: currentMode})),
   });
   var data;
   try { data = await res.json(); } catch (_) {
@@ -1761,7 +1789,8 @@ function renderLeaderboard() {
   });
 }
 
-function renderAnalytics() {
+function renderAnalytics(extra) {
+  extra = extra || {};
   var panel = document.getElementById("analyticsPanel");
   if (!isAnalyticsPage && !_showAnalyticsOnIndex) {
     panel.style.display = "none";
@@ -2030,6 +2059,215 @@ function renderAnalytics() {
     }
     lineups.appendChild(box);
   });
+
+  // Extended analytics panels
+  renderPackStats(extra.packStats);
+  renderModeStats(extra.modeStats);
+  renderProviderHealth(extra.providerHealth);
+  renderResponseLengths(extra.responseLengths);
+  renderWinStreaks(extra.winStreaks);
+  renderBlindAlignment(extra.blindAlignment);
+  renderPromptTopics(extra.promptTopics);
+  renderCostForecast(extra.costForecast);
+  renderPatternStats(extra.patternStats);
+}
+
+function renderPackStats(data) {
+  var el = document.getElementById("analyticsPacks");
+  if (!el) return;
+  el.textContent = "";
+  var items = data && data.items ? data.items : [];
+  if (!items.length) { el.appendChild(emptyAnalytics("No pack data yet.")); return; }
+  var header = document.createElement("div");
+  header.className = "model-row";
+  ["pack", "runs", "success", "avg score", "failure"].forEach(function(l) {
+    var c = document.createElement("div"); c.textContent = l; header.appendChild(c);
+  });
+  el.appendChild(header);
+  items.forEach(function(item) {
+    var row = document.createElement("div"); row.className = "model-row";
+    [item.pack, String(item.runs), String(item.successRate) + "%", String(item.avgCrownScore), String(item.failureRate) + "%"].forEach(function(v) {
+      var c = document.createElement("div"); c.textContent = v; row.appendChild(c);
+    });
+    el.appendChild(row);
+  });
+}
+
+function renderModeStats(data) {
+  var el = document.getElementById("analyticsModes");
+  if (!el) return;
+  el.textContent = "";
+  var items = data && data.items ? data.items : [];
+  if (!items.length) { el.appendChild(emptyAnalytics("No mode data yet.")); return; }
+  var header = document.createElement("div");
+  header.className = "model-row";
+  ["mode", "runs", "success", "avg score", "failure"].forEach(function(l) {
+    var c = document.createElement("div"); c.textContent = l; header.appendChild(c);
+  });
+  el.appendChild(header);
+  items.forEach(function(item) {
+    var row = document.createElement("div"); row.className = "model-row";
+    [item.mode, String(item.runs), String(item.successRate) + "%", String(item.avgCrownScore), String(item.failureRate) + "%"].forEach(function(v) {
+      var c = document.createElement("div"); c.textContent = v; row.appendChild(c);
+    });
+    el.appendChild(row);
+  });
+}
+
+function renderProviderHealth(data) {
+  var el = document.getElementById("analyticsProviders");
+  if (!el) return;
+  el.textContent = "";
+  var items = data && data.items ? data.items : [];
+  if (!items.length) { el.appendChild(emptyAnalytics("No provider data yet.")); return; }
+  var header = document.createElement("div");
+  header.className = "model-row";
+  ["provider", "runs", "success", "avg score", "failure", "latency"].forEach(function(l) {
+    var c = document.createElement("div"); c.textContent = l; header.appendChild(c);
+  });
+  el.appendChild(header);
+  items.forEach(function(item) {
+    var row = document.createElement("div"); row.className = "model-row";
+    [item.provider, String(item.runs), String(item.successRate) + "%", String(item.avgCrownScore), String(item.failureRate) + "%", String(item.avgLatencyMs) + "ms"].forEach(function(v) {
+      var c = document.createElement("div"); c.textContent = v; row.appendChild(c);
+    });
+    el.appendChild(row);
+  });
+}
+
+function renderResponseLengths(data) {
+  var el = document.getElementById("analyticsResponseLengths");
+  if (!el) return;
+  el.textContent = "";
+  var items = data && data.items ? data.items : [];
+  if (!items.length) { el.appendChild(emptyAnalytics("No response length data yet.")); return; }
+  var header = document.createElement("div");
+  header.className = "model-row";
+  ["model", "avg chars", "min", "max", "samples"].forEach(function(l) {
+    var c = document.createElement("div"); c.textContent = l; header.appendChild(c);
+  });
+  el.appendChild(header);
+  items.forEach(function(item) {
+    var row = document.createElement("div"); row.className = "model-row";
+    [modelName(item.modelId), String(item.avgLength), String(item.minLength), String(item.maxLength), String(item.count)].forEach(function(v) {
+      var c = document.createElement("div"); c.textContent = v; row.appendChild(c);
+    });
+    el.appendChild(row);
+  });
+}
+
+function renderWinStreaks(data) {
+  var el = document.getElementById("analyticsWinStreaks");
+  if (!el) return;
+  el.textContent = "";
+  var items = data && data.items ? data.items : [];
+  if (!items.length) { el.appendChild(emptyAnalytics("No streak data yet.")); return; }
+  var header = document.createElement("div");
+  header.className = "model-row";
+  ["model", "max streak", "total wins"].forEach(function(l) {
+    var c = document.createElement("div"); c.textContent = l; header.appendChild(c);
+  });
+  el.appendChild(header);
+  items.forEach(function(item) {
+    var row = document.createElement("div"); row.className = "model-row";
+    [modelName(item.modelId), String(item.maxStreak), String(item.totalWins)].forEach(function(v) {
+      var c = document.createElement("div"); c.textContent = v; row.appendChild(c);
+    });
+    el.appendChild(row);
+  });
+}
+
+function renderBlindAlignment(data) {
+  var el = document.getElementById("analyticsBlind");
+  if (!el) return;
+  el.textContent = "";
+  if (!data || !data.totalVotes) { el.appendChild(emptyAnalytics("No blind vote data yet.")); return; }
+  var row = document.createElement("div");
+  row.className = "budget-row";
+  var label = document.createElement("div");
+  label.textContent = "Human votes aligning with Bob's crown";
+  row.appendChild(label);
+  var status = document.createElement("div");
+  status.className = "budget-status ok";
+  status.textContent = data.alignmentPct + "% (" + data.alignedVotes + " / " + data.totalVotes + ")";
+  row.appendChild(status);
+  el.appendChild(row);
+}
+
+function renderPromptTopics(data) {
+  var el = document.getElementById("analyticsTopics");
+  if (!el) return;
+  el.textContent = "";
+  var items = data && data.items ? data.items : [];
+  if (!items.length) { el.appendChild(emptyAnalytics("No topic data yet.")); return; }
+  var header = document.createElement("div");
+  header.className = "model-row";
+  ["topic", "runs", "success", "avg score", "failure"].forEach(function(l) {
+    var c = document.createElement("div"); c.textContent = l; header.appendChild(c);
+  });
+  el.appendChild(header);
+  items.forEach(function(item) {
+    var row = document.createElement("div"); row.className = "model-row";
+    [item.topic, String(item.runs), String(item.successRate) + "%", String(item.avgCrownScore), String(item.failureRate) + "%"].forEach(function(v) {
+      var c = document.createElement("div"); c.textContent = v; row.appendChild(c);
+    });
+    el.appendChild(row);
+  });
+}
+
+function renderCostForecast(data) {
+  var el = document.getElementById("analyticsForecast");
+  if (!el) return;
+  el.textContent = "";
+  if (!data) { el.appendChild(emptyAnalytics("Not enough data for forecasting.")); return; }
+  var entries = [
+    ["avg daily spend", "$" + String(data.avgDailySpend || 0)],
+    ["monthly projected", "$" + String(data.monthlyProjected || 0)],
+    ["projected total", "$" + String(data.projectedTotal || 0)],
+  ];
+  if (data.daysUntilOver !== null) {
+    entries.push(["days until budget", String(data.daysUntilOver)]);
+  }
+  entries.forEach(function(entry) {
+    var row = document.createElement("div");
+    row.className = "budget-row";
+    var label = document.createElement("div");
+    label.textContent = entry[0];
+    row.appendChild(label);
+    var status = document.createElement("div");
+    status.className = "budget-status " + (entry[1] === "0" ? "over" : "ok");
+    status.textContent = entry[1];
+    row.appendChild(status);
+    el.appendChild(row);
+  });
+}
+
+function renderPatternStats(data) {
+  var el = document.getElementById("analyticsPatterns");
+  if (!el) return;
+  el.textContent = "";
+  var items = data && data.items ? data.items : [];
+  if (!items.length) { el.appendChild(emptyAnalytics("No pattern data yet.")); return; }
+  var header = document.createElement("div");
+  header.className = "model-row";
+  ["model", "any pattern", "dominant"].forEach(function(l) {
+    var c = document.createElement("div"); c.textContent = l; header.appendChild(c);
+  });
+  el.appendChild(header);
+  items.forEach(function(item) {
+    var row = document.createElement("div"); row.className = "model-row";
+    [modelName(item.modelId), String(item.anyPatternRate) + "%", String(item.dominantPattern).replace(/_/g, " ")].forEach(function(v) {
+      var c = document.createElement("div"); c.textContent = v; row.appendChild(c);
+    });
+    el.appendChild(row);
+  });
+}
+
+function emptyAnalytics(msg) {
+  var el = document.createElement("div");
+  el.className = "analytics-empty";
+  el.textContent = msg || "No data.";
+  return el;
 }
 
 function renderDrift(data) {

@@ -304,9 +304,267 @@ function computePatternStats(rows) {
   }).sort(function(a, b) { return b.anyPatternRate - a.anyPatternRate; });
 }
 
+function computePackStats(rows) {
+  const packMap = {};
+  rows.forEach(function(run) {
+    const pack = String(run.pack || "unknown");
+    if (!packMap[pack]) {
+      packMap[pack] = { pack: pack, runs: 0, successRuns: 0, failures: 0, crownScoreTotal: 0, crownScoreCount: 0 };
+    }
+    const stat = packMap[pack];
+    stat.runs += 1;
+    const status = run.execution && run.execution.summary && run.execution.summary.overallStatus || "unknown";
+    if (status === "success") stat.successRuns += 1;
+    else if (status !== "unknown") stat.failures += 1;
+    if (run.crownModelId) {
+      stat.crownScoreTotal += Number(run.crownScore || 0);
+      stat.crownScoreCount += 1;
+    }
+  });
+  return Object.keys(packMap).map(function(pack) {
+    const s = packMap[pack];
+    return {
+      pack: s.pack,
+      runs: s.runs,
+      successRate: s.runs ? Math.round((s.successRuns / s.runs) * 100) : 0,
+      avgCrownScore: s.crownScoreCount ? Math.round(s.crownScoreTotal / s.crownScoreCount) : 0,
+      failureRate: s.runs ? Math.round((s.failures / s.runs) * 100) : 0,
+    };
+  }).sort(function(a, b) { return b.runs - a.runs; });
+}
+
+function computeModeStats(rows) {
+  const modeMap = {};
+  rows.forEach(function(run) {
+    const mode = String(run.mode || "unknown");
+    if (!modeMap[mode]) {
+      modeMap[mode] = { mode: mode, runs: 0, successRuns: 0, failures: 0, crownScoreTotal: 0, crownScoreCount: 0 };
+    }
+    const stat = modeMap[mode];
+    stat.runs += 1;
+    const status = run.execution && run.execution.summary && run.execution.summary.overallStatus || "unknown";
+    if (status === "success") stat.successRuns += 1;
+    else if (status !== "unknown") stat.failures += 1;
+    if (run.crownModelId) {
+      stat.crownScoreTotal += Number(run.crownScore || 0);
+      stat.crownScoreCount += 1;
+    }
+  });
+  return Object.keys(modeMap).map(function(mode) {
+    const s = modeMap[mode];
+    return {
+      mode: s.mode,
+      runs: s.runs,
+      successRate: s.runs ? Math.round((s.successRuns / s.runs) * 100) : 0,
+      avgCrownScore: s.crownScoreCount ? Math.round(s.crownScoreTotal / s.crownScoreCount) : 0,
+      failureRate: s.runs ? Math.round((s.failures / s.runs) * 100) : 0,
+    };
+  }).sort(function(a, b) { return b.runs - a.runs; });
+}
+
+function computeProviderHealth(rows) {
+  const providerMap = {};
+  rows.forEach(function(run) {
+    const provider = String(run.contestantProvider || "unknown");
+    if (!providerMap[provider]) {
+      providerMap[provider] = { provider: provider, runs: 0, successRuns: 0, failures: 0, crownScoreTotal: 0, crownScoreCount: 0, durationTotal: 0, durationCount: 0 };
+    }
+    const stat = providerMap[provider];
+    stat.runs += 1;
+    const status = run.execution && run.execution.summary && run.execution.summary.overallStatus || "unknown";
+    if (status === "success") stat.successRuns += 1;
+    else if (status !== "unknown") stat.failures += 1;
+    if (run.crownModelId) {
+      stat.crownScoreTotal += Number(run.crownScore || 0);
+      stat.crownScoreCount += 1;
+    }
+    const models = run.execution && run.execution.models ? run.execution.models : {};
+    Object.keys(models).forEach(function(mId) {
+      if (models[mId] && models[mId].durationMs) {
+        stat.durationTotal += Number(models[mId].durationMs || 0);
+        stat.durationCount += 1;
+      }
+    });
+  });
+  return Object.keys(providerMap).map(function(provider) {
+    const s = providerMap[provider];
+    return {
+      provider: s.provider,
+      runs: s.runs,
+      successRate: s.runs ? Math.round((s.successRuns / s.runs) * 100) : 0,
+      avgCrownScore: s.crownScoreCount ? Math.round(s.crownScoreTotal / s.crownScoreCount) : 0,
+      failureRate: s.runs ? Math.round((s.failures / s.runs) * 100) : 0,
+      avgLatencyMs: s.durationCount ? Math.round(s.durationTotal / s.durationCount) : 0,
+    };
+  }).sort(function(a, b) { return b.runs - a.runs; });
+}
+
+function computeResponseLengths(rows) {
+  const modelMap = {};
+  rows.forEach(function(run) {
+    const responses = run.responses && typeof run.responses === "object" ? run.responses : {};
+    Object.keys(responses).forEach(function(modelId) {
+      if (!modelMap[modelId]) {
+        modelMap[modelId] = { modelId: modelId, totalLength: 0, count: 0, minLength: Infinity, maxLength: 0 };
+      }
+      const text = String(responses[modelId] || "");
+      const len = text.length;
+      const s = modelMap[modelId];
+      s.totalLength += len;
+      s.count += 1;
+      if (len < s.minLength) s.minLength = len;
+      if (len > s.maxLength) s.maxLength = len;
+    });
+  });
+  return Object.keys(modelMap).map(function(modelId) {
+    const s = modelMap[modelId];
+    return {
+      modelId: modelId,
+      avgLength: s.count ? Math.round(s.totalLength / s.count) : 0,
+      minLength: s.minLength === Infinity ? 0 : s.minLength,
+      maxLength: s.maxLength,
+      count: s.count,
+    };
+  }).sort(function(a, b) { return b.avgLength - a.avgLength; });
+}
+
+function computeWinStreaks(rows) {
+  const modelMap = {};
+  rows.forEach(function(run) {
+    if (!run.crownModelId) return;
+    if (!modelMap[run.crownModelId]) {
+      modelMap[run.crownModelId] = { modelId: run.crownModelId, currentStreak: 0, maxStreak: 0, totalWins: 0, lastWinIndex: -1 };
+    }
+  });
+  rows.forEach(function(run, idx) {
+    if (!run.crownModelId) return;
+    const s = modelMap[run.crownModelId];
+    s.totalWins += 1;
+    if (s.lastWinIndex >= 0 && idx === s.lastWinIndex + 1) {
+      s.currentStreak += 1;
+    } else {
+      s.currentStreak = 1;
+    }
+    s.lastWinIndex = idx;
+    if (s.currentStreak > s.maxStreak) s.maxStreak = s.currentStreak;
+  });
+  return Object.keys(modelMap).map(function(modelId) {
+    const s = modelMap[modelId];
+    return { modelId: s.modelId, maxStreak: s.maxStreak, totalWins: s.totalWins };
+  }).sort(function(a, b) { return b.maxStreak - a.maxStreak || b.totalWins - a.totalWins; });
+}
+
+function computeBlindAlignment(rows) {
+  let aligned = 0;
+  let total = 0;
+  rows.forEach(function(run) {
+    if (!run.execution || !run.execution.blindMapping) return;
+    const userVotes = run.execution && run.execution.userVotes ? run.execution.userVotes : {};
+    const crown = run.crownModelId;
+    if (!crown) return;
+    Object.keys(userVotes).forEach(function(voterId) {
+      total += 1;
+      if (userVotes[voterId] === crown) aligned += 1;
+    });
+  });
+  return { totalVotes: total, alignedVotes: aligned, alignmentPct: total ? Math.round((aligned / total) * 100) : 0 };
+}
+
+function computePromptTopics(rows) {
+  const topicMap = {};
+  const topicPatterns = [
+    { key: "coding", pattern: /code|program|function|bug|error|script|api|debug/i },
+    { key: "creative", pattern: /story|poem|song|creative|write|imagine|fiction/i },
+    { key: "business", pattern: /business|strategy|market|revenue|startup|investor|profit/i },
+    { key: "science", pattern: /science|physics|chemistry|biology|research|study|experiment/i },
+    { key: "philosophy", pattern: /philosophy|meaning|existence|consciousness|ethics|moral/i },
+    { key: "politics", pattern: /politic|government|policy|election|vote|party|democrat|republican/i },
+    { key: "personal", pattern: /relationship|advice|feel|emotion|love|friend|family|mental health/i },
+    { key: "technical", pattern: /server|database|network|infrastructure|deploy|cloud|kubernetes/i },
+    { key: "math", pattern: /math|equation|calculate|formula|algebra|geometry|number/i },
+    { key: "safety_test", pattern: /jailbreak|hack|exploit|bypass|ignore|pretend|roleplay|DAN/i },
+  ];
+  rows.forEach(function(run) {
+    const prompt = String(run.prompt || "").toLowerCase();
+    let matched = false;
+    topicPatterns.forEach(function(tp) {
+      if (tp.pattern.test(prompt)) {
+        matched = true;
+        if (!topicMap[tp.key]) {
+          topicMap[tp.key] = { topic: tp.key, runs: 0, successRuns: 0, failures: 0, crownScoreTotal: 0, crownScoreCount: 0 };
+        }
+        const s = topicMap[tp.key];
+        s.runs += 1;
+        const status = run.execution && run.execution.summary && run.execution.summary.overallStatus || "unknown";
+        if (status === "success") s.successRuns += 1;
+        else if (status !== "unknown") s.failures += 1;
+        if (run.crownModelId) {
+          s.crownScoreTotal += Number(run.crownScore || 0);
+          s.crownScoreCount += 1;
+        }
+      }
+    });
+    if (!matched) {
+      if (!topicMap["other"]) {
+        topicMap["other"] = { topic: "other", runs: 0, successRuns: 0, failures: 0, crownScoreTotal: 0, crownScoreCount: 0 };
+      }
+      const s = topicMap["other"];
+      s.runs += 1;
+      const status = run.execution && run.execution.summary && run.execution.summary.overallStatus || "unknown";
+      if (status === "success") s.successRuns += 1;
+      else if (status !== "unknown") s.failures += 1;
+      if (run.crownModelId) {
+        s.crownScoreTotal += Number(run.crownScore || 0);
+        s.crownScoreCount += 1;
+      }
+    }
+  });
+  return Object.keys(topicMap).map(function(key) {
+    const s = topicMap[key];
+    return {
+      topic: s.topic,
+      runs: s.runs,
+      successRate: s.runs ? Math.round((s.successRuns / s.runs) * 100) : 0,
+      avgCrownScore: s.crownScoreCount ? Math.round(s.crownScoreTotal / s.crownScoreCount) : 0,
+      failureRate: s.runs ? Math.round((s.failures / s.runs) * 100) : 0,
+    };
+  }).sort(function(a, b) { return b.runs - a.runs; });
+}
+
+function computeCostForecast(dailyTrend, budgets) {
+  if (!dailyTrend || !dailyTrend.length) return null;
+  const spends = dailyTrend.map(function(d) { return Number(d.estimatedSpendUsd || 0); });
+  const avgDaily = spends.reduce(function(a, b) { return a + b; }, 0) / spends.length;
+  const totalSpend = spends.reduce(function(a, b) { return a + b; }, 0);
+  const monthlyProjected = Math.round(avgDaily * 30 * 100) / 100;
+  const daysInMonth = 30;
+  const remainingDays = Math.max(0, daysInMonth - dailyTrend.length);
+  const projectedTotal = Math.round((totalSpend + avgDaily * remainingDays) * 100) / 100;
+  const monthlyLimit = budgets && budgets.monthlyUsd ? budgets.monthlyUsd : null;
+  var daysUntilOver = null;
+  if (monthlyLimit && avgDaily > 0) {
+    daysUntilOver = Math.ceil((monthlyLimit - totalSpend) / avgDaily);
+    if (daysUntilOver < 0) daysUntilOver = 0;
+  }
+  return {
+    avgDailySpend: Math.round(avgDaily * 100) / 100,
+    monthlyProjected: monthlyProjected,
+    projectedTotal: projectedTotal,
+    daysUntilOver: daysUntilOver,
+  };
+}
+
 module.exports = {
   computeAnalyticsSummary,
   computeFailureSummary,
   computePatternStats,
+  computePackStats,
+  computeModeStats,
+  computeProviderHealth,
+  computeResponseLengths,
+  computeWinStreaks,
+  computeBlindAlignment,
+  computePromptTopics,
+  computeCostForecast,
   RESPONSE_PATTERNS,
 };

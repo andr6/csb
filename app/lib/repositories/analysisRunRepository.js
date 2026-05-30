@@ -22,6 +22,8 @@ function createAnalysisRunRepository() {
       execution: run.execution && typeof run.execution === "object" ? run.execution : {},
       createdAt: run.createdAt || new Date().toISOString(),
       isChallenge: (run.execution && run.execution.isChallenge) ? 1 : 0,
+      pack: String(run.pack || ""),
+      mode: String(run.mode || ""),
     };
   }
 
@@ -39,6 +41,8 @@ function createAnalysisRunRepository() {
       timings: JSON.parse(row.timings || "{}"),
       execution: JSON.parse(row.execution || "{}"),
       createdAt: row.createdAt,
+      pack: row.pack || "",
+      mode: row.mode || "",
     };
   }
 
@@ -62,6 +66,14 @@ function createAnalysisRunRepository() {
     if (opts.contestantProvider) {
       conditions.push("contestant_provider = ?");
       params.push(opts.contestantProvider);
+    }
+    if (opts.pack) {
+      conditions.push("pack = ?");
+      params.push(opts.pack);
+    }
+    if (opts.mode) {
+      conditions.push("mode = ?");
+      params.push(opts.mode);
     }
     if (opts.judgeProvider) {
       conditions.push("judge_provider = ?");
@@ -109,7 +121,7 @@ function createAnalysisRunRepository() {
     const opts = normalizeFilterOptions(options);
     const { sql: where, params } = buildWhereClause(opts);
     return queryJsonParams([
-      "SELECT id, prompt, responses_json AS responses, judgement_json AS judgement,",
+      "SELECT id, prompt, pack, mode, responses_json AS responses, judgement_json AS judgement,",
       "  crown_model_id AS crownModelId, crown_score AS crownScore,",
       "  contestant_provider AS contestantProvider, judge_provider AS judgeProvider,",
       "  judge_model AS judgeModel, timings_json AS timings, execution_json AS execution,",
@@ -124,7 +136,7 @@ function createAnalysisRunRepository() {
   function insertRun(run) {
     const item = normalizeRun(run);
     runSqlParams(
-      "INSERT INTO analysis_runs (prompt, responses_json, judgement_json, crown_model_id, crown_score, contestant_provider, judge_provider, judge_model, timings_json, execution_json, created_at, is_challenge) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO analysis_runs (prompt, responses_json, judgement_json, crown_model_id, crown_score, contestant_provider, judge_provider, judge_model, timings_json, execution_json, created_at, is_challenge, pack, mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       [
         item.prompt,
         JSON.stringify(item.responses),
@@ -138,6 +150,8 @@ function createAnalysisRunRepository() {
         JSON.stringify(item.execution),
         item.createdAt,
         item.isChallenge,
+        item.pack,
+        item.mode,
       ]
     );
 
@@ -150,7 +164,7 @@ function createAnalysisRunRepository() {
     const opts = normalizeFilterOptions(options);
     const { sql: where, params } = buildWhereClause(opts);
     return queryJsonParams([
-      "SELECT id, prompt, responses_json AS responses, judgement_json AS judgement,",
+      "SELECT id, prompt, pack, mode, responses_json AS responses, judgement_json AS judgement,",
       "  crown_model_id AS crownModelId, crown_score AS crownScore,",
       "  contestant_provider AS contestantProvider, judge_provider AS judgeProvider,",
       "  judge_model AS judgeModel, timings_json AS timings, execution_json AS execution,",
@@ -164,7 +178,7 @@ function createAnalysisRunRepository() {
 
   function getById(id) {
     const rows = queryJsonParams(
-      "SELECT id, prompt, responses_json AS responses, judgement_json AS judgement, crown_model_id AS crownModelId, crown_score AS crownScore, contestant_provider AS contestantProvider, judge_provider AS judgeProvider, judge_model AS judgeModel, timings_json AS timings, execution_json AS execution, created_at AS createdAt FROM analysis_runs WHERE id = ? LIMIT 1;",
+      "SELECT id, prompt, pack, mode, responses_json AS responses, judgement_json AS judgement, crown_model_id AS crownModelId, crown_score AS crownScore, contestant_provider AS contestantProvider, judge_provider AS judgeProvider, judge_model AS judgeModel, timings_json AS timings, execution_json AS execution, created_at AS createdAt FROM analysis_runs WHERE id = ? LIMIT 1;",
       [Number(id)]
     );
     return rows.length ? rowToRun(rows[0]) : null;
@@ -173,7 +187,7 @@ function createAnalysisRunRepository() {
   function listTopByScore(limit) {
     const safeLimit = Math.max(1, Math.min(50, Number(limit || 10)));
     return queryJson([
-      "SELECT id, prompt, responses_json AS responses, judgement_json AS judgement,",
+      "SELECT id, prompt, pack, mode, responses_json AS responses, judgement_json AS judgement,",
       "  crown_model_id AS crownModelId, crown_score AS crownScore,",
       "  contestant_provider AS contestantProvider, judge_provider AS judgeProvider,",
       "  judge_model AS judgeModel, timings_json AS timings, execution_json AS execution,",
@@ -346,7 +360,7 @@ function createAnalysisRunRepository() {
     const opts = normalizeFilterOptions(options);
     const { sql: where, params } = buildWhereClause(opts, { failuresOnly: true });
     const failedRows = queryJsonParams([
-      "SELECT id, prompt, responses_json AS responses, judgement_json AS judgement,",
+      "SELECT id, prompt, pack, mode, responses_json AS responses, judgement_json AS judgement,",
       "  crown_model_id AS crownModelId, crown_score AS crownScore,",
       "  contestant_provider AS contestantProvider, judge_provider AS judgeProvider,",
       "  judge_model AS judgeModel, timings_json AS timings, execution_json AS execution,",

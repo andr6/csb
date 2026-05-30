@@ -358,7 +358,7 @@ function createApp(overrides) {
     });
   }
 
-  function buildFailureRun(prompt, responses, meta, phase, error, rawJudge) {
+  function buildFailureRun(prompt, responses, meta, phase, error, rawJudge, pack, mode) {
     const errorMessage = String(error && error.message ? error.message : error || "Unknown error");
     return {
       prompt: prompt,
@@ -374,6 +374,8 @@ function createApp(overrides) {
       judgeProvider: JUDGE_PROVIDER,
       judgeModel: JUDGE_MODEL,
       timings: meta.timings,
+      pack: pack || "bar",
+      mode: mode || "absurd",
       execution: {
         summary: {
           overallStatus: "failure",
@@ -1349,6 +1351,7 @@ function createApp(overrides) {
       ? rawCriteria.filter(function(k) { return VALID_CRITERIA_KEYS.indexOf(k) !== -1; })
       : null;
     const activePackId = req.body.pack || "bar";
+    const activeMode = req.body.mode || "absurd";
     const activePack = getPack(activePackId);
     const activeJudgePrompt = deps.judgeSystemPrompt || activePack.judgeSystemPrompt;
 
@@ -1401,12 +1404,13 @@ function createApp(overrides) {
           judgeProvider: JUDGE_PROVIDER,
           judgeModel: JUDGE_MODEL,
           timings: meta.timings,
+          pack: activePackId,
+          mode: activeMode,
           execution: (function() {
             var ext = Object.assign({}, meta.execution || {});
             if (criteria && criteria.length) ext.criteria = criteria;
             if (judgeRuns > 1) ext.judgeRuns = judgeRuns;
             if (payload.judgeConfidence) ext.judgeConfidence = payload.judgeConfidence;
-            if (activePackId !== "bar") ext.pack = activePackId;
             if (meta.blindMapping) ext.blindMapping = meta.blindMapping;
             return ext;
           }()),
@@ -1423,12 +1427,12 @@ function createApp(overrides) {
         if (meta.blindMapping) payload.blindMapping = meta.blindMapping;
         res.json(payload);
       } catch (e) {
-        addAnalysisRun(buildFailureRun(prompt, responses, meta, "judge_parse", e, raw));
+        addAnalysisRun(buildFailureRun(prompt, responses, meta, "judge_parse", e, raw, activePackId, activeMode));
         console.error("[judge] JSON parse failed. Raw:", String(raw || "").slice(0, 300));
         return res.status(500).json({ error: "Judge returned invalid JSON." });
       }
     } catch (e) {
-      addAnalysisRun(buildFailureRun(prompt, responses, meta, "judge_call", e));
+      addAnalysisRun(buildFailureRun(prompt, responses, meta, "judge_call", e, null, activePackId, activeMode));
       console.error("[judge] via " + JUDGE_PROVIDER + " (" + JUDGE_MODEL + "):", e.message);
       res.status(500).json({ error: "Judge failed." });
     }
@@ -1458,6 +1462,32 @@ function createApp(overrides) {
   // F6 — response pattern analytics
   app.get("/api/patterns", authMw.requireAuth, analyticsAuth, function(req, res) {
     res.json({ items: analysisRunServices.getPatternStats(buildRunFilters(req.query)) });
+  });
+
+  // Extended analytics endpoints
+  app.get("/api/analytics/packs", authMw.requireAuth, analyticsAuth, function(req, res) {
+    res.json({ items: analysisRunServices.getPackStats(buildRunFilters(req.query)) });
+  });
+  app.get("/api/analytics/modes", authMw.requireAuth, analyticsAuth, function(req, res) {
+    res.json({ items: analysisRunServices.getModeStats(buildRunFilters(req.query)) });
+  });
+  app.get("/api/analytics/providers", authMw.requireAuth, analyticsAuth, function(req, res) {
+    res.json({ items: analysisRunServices.getProviderHealth(buildRunFilters(req.query)) });
+  });
+  app.get("/api/analytics/response-lengths", authMw.requireAuth, analyticsAuth, function(req, res) {
+    res.json({ items: analysisRunServices.getResponseLengths(buildRunFilters(req.query)) });
+  });
+  app.get("/api/analytics/win-streaks", authMw.requireAuth, analyticsAuth, function(req, res) {
+    res.json({ items: analysisRunServices.getWinStreaks(buildRunFilters(req.query)) });
+  });
+  app.get("/api/analytics/blind-alignment", authMw.requireAuth, analyticsAuth, function(req, res) {
+    res.json(analysisRunServices.getBlindAlignment(buildRunFilters(req.query)));
+  });
+  app.get("/api/analytics/prompt-topics", authMw.requireAuth, analyticsAuth, function(req, res) {
+    res.json({ items: analysisRunServices.getPromptTopics(buildRunFilters(req.query)) });
+  });
+  app.get("/api/analytics/cost-forecast", authMw.requireAuth, analyticsAuth, function(req, res) {
+    res.json(analysisRunServices.getCostForecast(buildRunFilters(req.query)));
   });
 
   // F8 — daily challenge trigger

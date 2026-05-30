@@ -46,6 +46,8 @@ function createJsonAnalysisRunRepository(options) {
       timings: run.timings && typeof run.timings === "object" ? run.timings : {},
       execution: run.execution && typeof run.execution === "object" ? run.execution : {},
       createdAt: run.createdAt || new Date().toISOString(),
+      pack: String(run.pack || ""),
+      mode: String(run.mode || ""),
     };
   }
 

@@ -1,6 +1,16 @@
 const { createAnalysisRunRepository } = require("./repositories/analysisRunRepository");
 const { createJsonAnalysisRunRepository } = require("./repositories/jsonAnalysisRunRepository");
-const { computePatternStats } = require("./analyticsEngine");
+const {
+  computePatternStats,
+  computePackStats,
+  computeModeStats,
+  computeProviderHealth,
+  computeResponseLengths,
+  computeWinStreaks,
+  computeBlindAlignment,
+  computePromptTopics,
+  computeCostForecast,
+} = require("./analyticsEngine");
 const {
   MODEL_MAP,
   MODEL_PRICING_USD,
@@ -435,10 +445,59 @@ function getPatternStats(options) {
   return computePatternStats(rows);
 }
 
+function getPackStats(options) {
+  const rows = runRepository.listRecent ? runRepository.listRecent(Object.assign({}, options, { limit: 500 })) : [];
+  return computePackStats(rows);
+}
+
+function getModeStats(options) {
+  const rows = runRepository.listRecent ? runRepository.listRecent(Object.assign({}, options, { limit: 500 })) : [];
+  return computeModeStats(rows);
+}
+
+function getProviderHealth(options) {
+  const rows = runRepository.listRecent ? runRepository.listRecent(Object.assign({}, options, { limit: 500 })) : [];
+  return computeProviderHealth(rows);
+}
+
+function getResponseLengths(options) {
+  const rows = runRepository.listRecent ? runRepository.listRecent(Object.assign({}, options, { limit: 500 })) : [];
+  return computeResponseLengths(rows);
+}
+
+function getWinStreaks(options) {
+  const rows = runRepository.listRecent ? runRepository.listRecent(Object.assign({}, options, { limit: 500 })) : [];
+  return computeWinStreaks(rows);
+}
+
+function getBlindAlignment(options) {
+  const rows = runRepository.listRecent ? runRepository.listRecent(Object.assign({}, options, { limit: 500 })) : [];
+  return computeBlindAlignment(rows);
+}
+
+function getPromptTopics(options) {
+  const rows = runRepository.listRecent ? runRepository.listRecent(Object.assign({}, options, { limit: 500 })) : [];
+  return computePromptTopics(rows);
+}
+
+function getCostForecast(options) {
+  const summary = runRepository.analyticsSummary ? runRepository.analyticsSummary(options) : { dailyTrend: [] };
+  const enriched = enrichAnalyticsSummary(summary, options);
+  return computeCostForecast(enriched.dailyTrend, enriched.budget);
+}
+
 module.exports = {
   addAnalysisRun: addAnalysisRun,
   listTopAnalysisRunsByScore: listTopAnalysisRunsByScore,
   getPatternStats: getPatternStats,
+  getPackStats: getPackStats,
+  getModeStats: getModeStats,
+  getProviderHealth: getProviderHealth,
+  getResponseLengths: getResponseLengths,
+  getWinStreaks: getWinStreaks,
+  getBlindAlignment: getBlindAlignment,
+  getPromptTopics: getPromptTopics,
+  getCostForecast: getCostForecast,
   listAnalysisRuns: listAnalysisRuns,
   countAnalysisRuns: countAnalysisRuns,
   getAnalysisRun: getAnalysisRun,
