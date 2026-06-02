@@ -12,6 +12,37 @@ const {
 } = require("./config");
 const { fetchJson, withTimeout } = require("./http");
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Provider plugin registry
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const _registry = new Map();
+
+function registerProvider(name, handler) {
+  if (!name || typeof name !== "string") {
+    throw new Error("registerProvider: name must be a non-empty string");
+  }
+  if (!handler || typeof handler.call !== "function") {
+    throw new Error("registerProvider: handler.call must be a function");
+  }
+  _registry.set(name, {
+    call: handler.call,
+    healthProbe: typeof handler.healthProbe === "function" ? handler.healthProbe : null,
+  });
+}
+
+function getProvider(name) {
+  return _registry.get(name);
+}
+
+function listProviders() {
+  return Array.from(_registry.keys());
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Provider implementations
+// ═══════════════════════════════════════════════════════════════════════════════
+
 function requireApiKey(provider, key) {
   if (!key) {
     throw new Error("Missing API key for provider: " + provider);
@@ -24,17 +55,19 @@ function ensureModel(model, provider) {
   }
 }
 
-async function callOpenRouter(model, system, userPrompt, key, timeoutMs) {
+async function callOpenRouter(model, system, userPrompt, key, timeoutMs, requestId) {
   ensureModel(model, "openrouter");
   requireApiKey("openrouter", key);
+  const headers = {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer " + key,
+    "HTTP-Referer": process.env.SITE_URL || "https://chatshitbob.com",
+    "X-Title": "Chat Shit Bob",
+  };
+  if (requestId) headers["X-Request-ID"] = requestId;
   const data = await fetchJson("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + key,
-      "HTTP-Referer": process.env.SITE_URL || "https://chatshitbob.com",
-      "X-Title": "Chat Shit Bob",
-    },
+    headers: headers,
     body: JSON.stringify({
       model: model,
       max_tokens: 2048,
@@ -47,17 +80,19 @@ async function callOpenRouter(model, system, userPrompt, key, timeoutMs) {
   return (data.choices && data.choices[0] && data.choices[0].message) ? data.choices[0].message.content : null;
 }
 
-async function callAnthropic(model, system, userPrompt, key, timeoutMs) {
+async function callAnthropic(model, system, userPrompt, key, timeoutMs, requestId) {
   ensureModel(model, "anthropic");
   requireApiKey("anthropic", key);
   const modelName = model.includes("/") ? model.split("/").slice(1).join("/") : model;
+  const headers = {
+    "Content-Type": "application/json",
+    "x-api-key": key,
+    "anthropic-version": "2023-06-01",
+  };
+  if (requestId) headers["X-Request-ID"] = requestId;
   const data = await fetchJson("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": key,
-      "anthropic-version": "2023-06-01",
-    },
+    headers: headers,
     body: JSON.stringify({
       model: modelName,
       max_tokens: 2048,
@@ -68,16 +103,18 @@ async function callAnthropic(model, system, userPrompt, key, timeoutMs) {
   return (data.content && data.content[0]) ? data.content[0].text : null;
 }
 
-async function callOpenAI(model, system, userPrompt, key, timeoutMs) {
+async function callOpenAI(model, system, userPrompt, key, timeoutMs, requestId) {
   ensureModel(model, "openai");
   requireApiKey("openai", key);
   const modelName = model.includes("/") ? model.split("/").slice(1).join("/") : model;
+  const headers = {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer " + key,
+  };
+  if (requestId) headers["X-Request-ID"] = requestId;
   const data = await fetchJson("https://api.openai.com/v1/chat/completions", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + key,
-    },
+    headers: headers,
     body: JSON.stringify({
       model: modelName,
       max_tokens: 2048,
@@ -90,16 +127,18 @@ async function callOpenAI(model, system, userPrompt, key, timeoutMs) {
   return (data.choices && data.choices[0] && data.choices[0].message) ? data.choices[0].message.content : null;
 }
 
-async function callGemini(model, system, userPrompt, key, timeoutMs) {
+async function callGemini(model, system, userPrompt, key, timeoutMs, requestId) {
   requireApiKey("gemini", key);
   var modelName = model.includes("/") ? model.split("/").slice(1).join("/") : model;
   ensureModel(modelName, "gemini");
 
+  const headers = { "Content-Type": "application/json", "x-goog-api-key": key };
+  if (requestId) headers["X-Request-ID"] = requestId;
   const data = await fetchJson(
     "https://generativelanguage.googleapis.com/v1beta/models/" + modelName + ":generateContent",
     {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+      headers: headers,
       body: JSON.stringify({
         system_instruction: { parts: [{ text: system }] },
         contents: [{ role: "user", parts: [{ text: userPrompt }] }],
@@ -115,15 +154,17 @@ async function callGemini(model, system, userPrompt, key, timeoutMs) {
     : null;
 }
 
-async function callLiteLLM(model, system, userPrompt, key, timeoutMs) {
+async function callLiteLLM(model, system, userPrompt, key, timeoutMs, requestId) {
   ensureModel(model, "litellm");
   requireApiKey("litellm", key);
+  const headers = {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer " + key,
+  };
+  if (requestId) headers["X-Request-ID"] = requestId;
   const data = await fetchJson(LITELLM_BASE + "/chat/completions", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + key,
-    },
+    headers: headers,
     body: JSON.stringify({
       model: model,
       max_tokens: 2048,
@@ -136,18 +177,141 @@ async function callLiteLLM(model, system, userPrompt, key, timeoutMs) {
   return (data.choices && data.choices[0] && data.choices[0].message) ? data.choices[0].message.content : null;
 }
 
-function dispatch(provider, model, system, userPrompt, keys, timeoutMs) {
-  switch (provider) {
-    case "openrouter": return callOpenRouter(model, system, userPrompt, keys.openrouter, timeoutMs);
-    case "anthropic": return callAnthropic(model, system, userPrompt, keys.anthropic, timeoutMs);
-    case "openai": return callOpenAI(model, system, userPrompt, keys.openai, timeoutMs);
-    case "gemini": return callGemini(model, system, userPrompt, keys.gemini, timeoutMs);
-    case "litellm": return callLiteLLM(model, system, userPrompt, keys.litellm, timeoutMs);
-    default: throw new Error("Unknown provider: " + provider);
-  }
+// Seed default providers at module load
+registerProvider("openrouter", {
+  call: callOpenRouter,
+  healthProbe: async function(key) {
+    requireApiKey("openrouter", key);
+    const timer = withTimeout(5000);
+    try {
+      const data = await fetchJson("https://openrouter.ai/api/v1/models", { method: "GET", signal: timer.signal }, "OpenRouter", 5000);
+      return data && Array.isArray(data.data) ? "reachable" : "auth_failed";
+    } catch (e) {
+      if (e.name === "AbortError") return "timeout";
+      if (e.upstreamStatus === 401 || e.upstreamStatus === 403) return "auth_failed";
+      return "unreachable";
+    } finally {
+      timer.cleanup();
+    }
+  },
+});
+
+registerProvider("anthropic", {
+  call: callAnthropic,
+  healthProbe: async function(key) {
+    requireApiKey("anthropic", key);
+    const timer = withTimeout(5000);
+    try {
+      // Lightweight POST probe: max_tokens=1
+      await fetchJson("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": key,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: "claude-3-haiku-20240307",
+          max_tokens: 1,
+          messages: [{ role: "user", content: "hi" }],
+        }),
+      }, "Anthropic", 5000);
+      return "reachable";
+    } catch (e) {
+      if (e.name === "AbortError") return "timeout";
+      if (e.upstreamStatus === 401 || e.upstreamStatus === 403) return "auth_failed";
+      return "unreachable";
+    } finally {
+      timer.cleanup();
+    }
+  },
+});
+
+registerProvider("openai", {
+  call: callOpenAI,
+  healthProbe: async function(key) {
+    requireApiKey("openai", key);
+    const timer = withTimeout(5000);
+    try {
+      // Lightweight POST probe: max_tokens=1
+      await fetchJson("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + key,
+        },
+        body: JSON.stringify({
+          model: "gpt-3.5-turbo",
+          max_tokens: 1,
+          messages: [{ role: "user", content: "hi" }],
+        }),
+      }, "OpenAI", 5000);
+      return "reachable";
+    } catch (e) {
+      if (e.name === "AbortError") return "timeout";
+      if (e.upstreamStatus === 401 || e.upstreamStatus === 403) return "auth_failed";
+      return "unreachable";
+    } finally {
+      timer.cleanup();
+    }
+  },
+});
+
+registerProvider("gemini", {
+  call: callGemini,
+  healthProbe: async function(key) {
+    requireApiKey("gemini", key);
+    const timer = withTimeout(5000);
+    try {
+      // Gemini doesn't have a lightweight models list endpoint; use HEAD
+      await fetch("https://generativelanguage.googleapis.com/v1beta/models?key=" + encodeURIComponent(key), {
+        method: "HEAD",
+        signal: timer.signal,
+      });
+      return "reachable";
+    } catch (e) {
+      if (e.name === "AbortError") return "timeout";
+      if (e.status === 401 || e.status === 403) return "auth_failed";
+      return "unreachable";
+    } finally {
+      timer.cleanup();
+    }
+  },
+});
+
+registerProvider("litellm", {
+  call: callLiteLLM,
+  healthProbe: async function(key) {
+    requireApiKey("litellm", key);
+    const timer = withTimeout(5000);
+    try {
+      await fetch(LITELLM_BASE + "/models", { method: "HEAD", signal: timer.signal });
+      return "reachable";
+    } catch (e) {
+      if (e.name === "AbortError") return "timeout";
+      if (e.status === 401 || e.status === 403) return "auth_failed";
+      return "unreachable";
+    } finally {
+      timer.cleanup();
+    }
+  },
+});
+
+function dispatch(provider, model, system, userPrompt, keys, timeoutMs, requestId) {
+  const entry = _registry.get(provider);
+  if (!entry) throw new Error("Unknown provider: " + provider);
+  var key = keys[provider];
+  return entry.call(model, system, userPrompt, key, timeoutMs, requestId);
 }
 
 async function checkProviderHealth(provider, key) {
+  const entry = _registry.get(provider);
+  if (!entry) return "unknown";
+  if (!key) return "missing_key";
+  if (typeof entry.healthProbe === "function") {
+    return entry.healthProbe(key);
+  }
+  // Fallback to HEAD probe for providers without a custom healthProbe
   var urls = {
     openrouter: "https://openrouter.ai/api/v1/models",
     anthropic: "https://api.anthropic.com/v1/models",
@@ -157,8 +321,6 @@ async function checkProviderHealth(provider, key) {
   };
   var url = urls[provider];
   if (!url) return "unknown";
-  if (!key) return "missing_key";
-
   var timer = withTimeout(5000);
   try {
     await fetch(url, { method: "HEAD", signal: timer.signal });
@@ -192,21 +354,26 @@ async function withRetry(fn, opts) {
   throw lastError;
 }
 
-function callContestant(modelId, system, userPrompt) {
+function callContestant(modelId, system, userPrompt, requestId) {
   const model = MODEL_MAP[modelId];
   const timeoutMs = MODEL_TIMEOUTS[modelId] || CONTESTANT_TIMEOUT_MS;
+  if (requestId) console.log("[fire] [req:" + requestId + "] contestant " + modelId + " via " + CONTESTANT_PROVIDER);
   return withRetry(function() {
-    return dispatch(CONTESTANT_PROVIDER, model, system, userPrompt, KEYS, timeoutMs);
+    return dispatch(CONTESTANT_PROVIDER, model, system, userPrompt, KEYS, timeoutMs, requestId);
   }, { maxRetries: 2 });
 }
 
-function callJudge(system, userPrompt) {
+function callJudge(system, userPrompt, requestId) {
+  if (requestId) console.log("[judge] [req:" + requestId + "] judge via " + JUDGE_PROVIDER);
   return withRetry(function() {
-    return dispatch(JUDGE_PROVIDER, JUDGE_MODEL, system, userPrompt, JUDGE_KEYS, JUDGE_TIMEOUT_MS);
+    return dispatch(JUDGE_PROVIDER, JUDGE_MODEL, system, userPrompt, JUDGE_KEYS, JUDGE_TIMEOUT_MS, requestId);
   }, { maxRetries: 2 });
 }
 
 module.exports = {
+  registerProvider: registerProvider,
+  getProvider: getProvider,
+  listProviders: listProviders,
   callContestant: callContestant,
   callJudge: callJudge,
   dispatch: dispatch,

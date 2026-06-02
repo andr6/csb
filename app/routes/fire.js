@@ -334,7 +334,7 @@ function createFireRouter(deps) {
 
     try {
       (deps.dailyIncrement || dailyIncrement)("fire");
-      const response = await callContestant(modelId, getVoice(modelId, packId), prompt);
+      const response = await callContestant(modelId, getVoice(modelId, packId), prompt, req.requestId);
       res.json({
         modelId: modelId,
         model: MODEL_MAP[modelId],
@@ -399,7 +399,7 @@ function createFireRouter(deps) {
       const judgePrompt = buildJudgePrompt(prompt, cleanResponses, criteria || undefined);
       const rawResults = await Promise.all(
         Array.from({ length: judgeRuns }, function() {
-          return callJudge(activeJudgePrompt, judgePrompt);
+          return callJudge(activeJudgePrompt, judgePrompt, req.requestId);
         })
       );
 
@@ -496,7 +496,7 @@ function createFireRouter(deps) {
         await Promise.all(VALID_MODELS.map(async function(modelId) {
           const t = Date.now();
           try {
-            const resp = await callContestant(modelId, getVoice(modelId), prompt);
+            const resp = await callContestant(modelId, getVoice(modelId), prompt, req.requestId);
             allResponses[modelId] = resp || "";
             execModels[modelId] = { status: "success", durationMs: Date.now() - t };
           } catch (e) {
@@ -505,7 +505,7 @@ function createFireRouter(deps) {
           }
         }));
         const judgeStart = Date.now();
-        const raw = await callJudge(getPack("bar").judgeSystemPrompt, buildJudgePrompt(prompt, allResponses));
+        const raw = await callJudge(getPack("bar").judgeSystemPrompt, buildJudgePrompt(prompt, allResponses), req.requestId);
         const judgeMs = Date.now() - judgeStart;
         const payload = normalizeJudgePayload(parseJudgeResponse(raw), Object.keys(allResponses));
         const successCount = VALID_MODELS.filter(function(id) { return execModels[id] && execModels[id].status === "success"; }).length;

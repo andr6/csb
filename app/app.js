@@ -223,6 +223,14 @@ function createApp(overrides) {
   // Middleware
   app.use(express.json({ limit: "100kb" }));
   app.set("trust proxy", 1);
+
+  // Request ID — correlation ID for tracing
+  app.use(function(req, res, next) {
+    req.requestId = crypto.randomUUID();
+    res.setHeader("X-Request-ID", req.requestId);
+    next();
+  });
+
   app.use(function(req, res, next) {
     res.setHeader(
       "Content-Security-Policy",
@@ -243,6 +251,7 @@ function createApp(overrides) {
       metricsServices.recordRequest(metrics, req, res, durationMs);
       console.log(JSON.stringify({
         type: "request",
+        requestId: req.requestId,
         method: req.method,
         path: req.originalUrl || req.url,
         statusCode: res.statusCode,

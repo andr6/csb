@@ -153,6 +153,40 @@ function parseJudgeResponse(raw) {
   throw new Error("Judge returned unparseable JSON. Raw snippet: " + snippet);
 }
 
+function validateJudgePayload(judgement, responseKeys) {
+  if (!judgement || typeof judgement !== "object") {
+    throw new Error("Judge payload validation failed: payload is not an object.");
+  }
+
+  const modelIds = (Array.isArray(responseKeys) && responseKeys.length) ? responseKeys : VALID_MODELS;
+  if (!modelIds.length) {
+    throw new Error("Judge payload validation failed: no model IDs to validate against.");
+  }
+
+  // scores must be an object
+  if (!judgement.scores || typeof judgement.scores !== "object") {
+    throw new Error("Judge payload validation failed: scores is missing or not an object.");
+  }
+
+  // Every model must have a numeric score (normalization will clamp to 0-100)
+  modelIds.forEach(function(id) {
+    const val = judgement.scores[id];
+    if (typeof val !== "number" || isNaN(val)) {
+      throw new Error("Judge payload validation failed: scores[" + id + "] is not a number (got " + JSON.stringify(val) + ").");
+    }
+  });
+
+  // verdicts must be an object (normalization will fix missing entries and coerce types)
+  if (!judgement.verdicts || typeof judgement.verdicts !== "object") {
+    throw new Error("Judge payload validation failed: verdicts is missing or not an object.");
+  }
+
+  // roast must be present (normalization will coerce to string and clamp length)
+  if (judgement.roast === undefined || judgement.roast === null) {
+    throw new Error("Judge payload validation failed: roast is missing.");
+  }
+}
+
 function normalizeJudgePayload(judgement, responseKeys) {
   if (!VALID_MODELS.length) {
     throw new Error("No valid models configured. Check ACTIVE_MODELS in .env.");
@@ -160,6 +194,9 @@ function normalizeJudgePayload(judgement, responseKeys) {
   if (!judgement || typeof judgement !== "object") {
     throw new Error("Judge returned empty payload.");
   }
+
+  // Schema validation before normalization
+  validateJudgePayload(judgement, responseKeys);
 
   // Scope to responseKeys when provided (VERSUS/CUSTOM modes) — prevents zero-score
   // pollution of analytics for models that didn't participate in a run.
@@ -198,5 +235,6 @@ module.exports = {
   buildJudgePrompt: buildJudgePrompt,
   computeMedianScores: computeMedianScores,
   parseJudgeResponse: parseJudgeResponse,
+  validateJudgePayload: validateJudgePayload,
   normalizeJudgePayload: normalizeJudgePayload,
 };

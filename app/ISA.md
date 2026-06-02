@@ -4,8 +4,8 @@ slug: 20260527-000000_csb-refactor-hardening
 project: CSB
 effort: advanced
 effort_source: context-override
-phase: learn
-progress: 17/32
+phase: complete
+progress: 23/32
 mode: interactive
 started: 2026-05-27T00:00:00Z
 updated: 2026-05-31T18:00:00Z
@@ -74,13 +74,13 @@ Ship all improvements in 5 phases, each independently verifiable, leaving CSB de
 - [x] ISC-14: `npm test` exits 0
 
 ### Phase 4 — Judge, Provider, & Observability
-- [ ] ISC-15: `lib/judge.js` adds `validateJudgePayload()` with schema enforcement (numeric scores, crown in scores, verdicts present, roast string)
-- [ ] ISC-16: Invalid judge payloads rejected at normalization stage with descriptive error
-- [ ] ISC-17: `lib/providers.js` refactored to plugin-based dispatch (`registerProvider(name, handler)`)
-- [ ] ISC-18: Health checks perform lightweight POST probe (not just HEAD) where supported
-- [ ] ISC-19: Express middleware adds `req.requestId = crypto.randomUUID()` to all inbound requests
-- [ ] ISC-20: `callContestant` and `callJudge` propagate `requestId` via custom header and log with it
-- [ ] ISC-21: `npm test` exits 0
+- [x] ISC-15: `lib/judge.js` adds `validateJudgePayload()` with schema enforcement (numeric scores, crown in scores, verdicts present, roast string)
+- [x] ISC-16: Invalid judge payloads rejected at normalization stage with descriptive error
+- [x] ISC-17: `lib/providers.js` refactored to plugin-based dispatch (`registerProvider(name, handler)`)
+- [x] ISC-18: Health checks perform lightweight POST probe (not just HEAD) where supported
+- [x] ISC-19: Express middleware adds `req.requestId = crypto.randomUUID()` to all inbound requests
+- [x] ISC-20: `callContestant` and `callJudge` propagate `requestId` via custom header and log with it
+- [x] ISC-21: `npm test` exits 0
 
 ### Phase 5 — Auth & Security Cleanup
 - [ ] ISC-22: `seedAdminUser()` stores password hash in SQLite instead of printing to console; one-time setup flag prevents re-generation
@@ -275,7 +275,15 @@ Ship all improvements in 5 phases, each independently verifiable, leaving CSB de
   - ISC-12: `rg "console.log.*security" routes/auth.js` — 0 hits; `rg "auditLog.insert" routes/auth.js` — 15 hits (all replacements accounted for)
   - ISC-13: `sqlite3 data/csb.sqlite ".schema metrics_hourly"` — table exists; `rg "rollupMetrics\|startHourlyRollup" lib/metrics.js server.js` — functions present and wired
   - ISC-14: `npm test` — 96/96 pass, 0 fail
+  - Phase 4:
+    - ISC-15: `rg "function validateJudgePayload" lib/judge.js` — function exists; validates scores object, numeric scores, verdicts object, roast presence
+    - ISC-16: `validateJudgePayload` called at top of `normalizeJudgePayload`; throws descriptive errors before normalization
+    - ISC-17: `rg "registerProvider" lib/providers.js` — function exists; 5 providers seeded at module load via `registerProvider(name, { call, healthProbe })`
+    - ISC-18: `rg "healthProbe" lib/providers.js` — Anthropic and OpenAI use POST probes with max_tokens=1; Gemini and LiteLLM keep HEAD fallback
+    - ISC-19: `rg "req.requestId" app.js` — middleware assigns `crypto.randomUUID()` and sets `X-Request-ID` response header
+    - ISC-20: `rg "X-Request-ID" lib/providers.js` — header added to all 5 provider calls; `rg "\[req:" lib/providers.js` — log prefix present on callContestant/callJudge
+    - ISC-21: `npm test` — 96/96 pass, 0 fail
 
 <!--
-Project ISA for CSB. E3 structure (Problem, Vision, Out of Scope, Constraints, Goal, Criteria, Features, Test Strategy). 32 ISCs across 5 phases. Phases 1-2 complete. Phase 3 in progress.
+Project ISA for CSB. E3 structure (Problem, Vision, Out of Scope, Constraints, Goal, Criteria, Features, Test Strategy). 32 ISCs across 5 phases. Phases 1-4 complete. Phase 5 pending.
 -->
