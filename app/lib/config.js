@@ -135,7 +135,8 @@ ACTIVE_MODELS.forEach(function(id) {
   MODEL_MAP[id] = MODEL_CATALOGUE[id];
 });
 
-const VALID_MODELS = Object.keys(MODEL_MAP);
+const ACTIVE_MODEL_IDS = Object.keys(MODEL_MAP);
+const VALID_MODELS = ACTIVE_MODEL_IDS; // deprecated alias — kept for backward compat
 // Per-model contestant timeout overrides — format: MODEL_TIMEOUT_NEMOTRON=30000
 const MODEL_TIMEOUTS = {};
 Object.keys(process.env).forEach(function(key) {
@@ -184,6 +185,7 @@ module.exports = {
   CONTESTANT_PROVIDER: CONTESTANT_PROVIDER,
   MODEL_CATALOGUE: MODEL_CATALOGUE,
   MODEL_MAP: MODEL_MAP,
+  ACTIVE_MODEL_IDS: ACTIVE_MODEL_IDS,
   VALID_MODELS: VALID_MODELS,
   MODEL_TIMEOUTS: MODEL_TIMEOUTS,
   MODEL_PRICING_USD: MODEL_PRICING_USD,

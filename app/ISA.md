@@ -4,8 +4,8 @@ slug: 20260527-000000_csb-refactor-hardening
 project: CSB
 effort: advanced
 effort_source: context-override
-phase: complete
-progress: 23/32
+phase: build
+progress: 32/32
 mode: interactive
 started: 2026-05-27T00:00:00Z
 updated: 2026-05-31T18:00:00Z
@@ -83,14 +83,14 @@ Ship all improvements in 5 phases, each independently verifiable, leaving CSB de
 - [x] ISC-21: `npm test` exits 0
 
 ### Phase 5 — Auth & Security Cleanup
-- [ ] ISC-22: `seedAdminUser()` stores password hash in SQLite instead of printing to console; one-time setup flag prevents re-generation
-- [ ] ISC-23: Password reset flow uses time-limited signed URL (`/reset?token=&sig=&exp=`) instead of raw token in email
-- [ ] ISC-24: `VALID_MODELS` renamed to `ACTIVE_MODEL_IDS` across codebase (`lib/config.js`, `lib/judge.js`, all routes)
-- [ ] ISC-25: `analyticsAuth` middleware renamed to `requireAdminAccess` (Basic + Bearer)
-- [ ] ISC-26: Daily challenge endpoint supports cron trigger via query param (`?trigger=cron`) with skip-if-already-run logic
-- [ ] ISC-27: Blind taste test mapping generated server-side (`/api/blind-mapping`) and returned in run response
-- [ ] ISC-28: Graceful shutdown handler added to `server.js` (SIGTERM → save metrics, close webhook queue, close DB)
-- [ ] ISC-29: `npm test` exits 0
+- [x] ISC-22: `seedAdminUser()` stores password hash in SQLite instead of printing to console; one-time setup flag prevents re-generation
+- [x] ISC-23: Password reset flow uses time-limited signed URL (`/reset?token=&sig=&exp=`) instead of raw token in email
+- [x] ISC-24: `VALID_MODELS` renamed to `ACTIVE_MODEL_IDS` across codebase (`lib/config.js`, `lib/judge.js`, all routes)
+- [x] ISC-25: `analyticsAuth` middleware renamed to `requireAdminAccess` (Basic + Bearer)
+- [x] ISC-26: Daily challenge endpoint supports cron trigger via query param (`?trigger=cron`) with skip-if-already-run logic
+- [x] ISC-27: Blind taste test mapping generated server-side (`/api/blind-mapping`) and returned in run response
+- [x] ISC-28: Graceful shutdown handler added to `server.js` (SIGTERM → save metrics, close webhook queue, close DB)
+- [x] ISC-29: `npm test` exits 0
 
 ### Anti-criteria
 - [x] ISC-30: Anti: `_tournaments` Map is sole storage (no DB fallback)
@@ -283,7 +283,16 @@ Ship all improvements in 5 phases, each independently verifiable, leaving CSB de
     - ISC-19: `rg "req.requestId" app.js` — middleware assigns `crypto.randomUUID()` and sets `X-Request-ID` response header
     - ISC-20: `rg "X-Request-ID" lib/providers.js` — header added to all 5 provider calls; `rg "\[req:" lib/providers.js` — log prefix present on callContestant/callJudge
     - ISC-21: `npm test` — 96/96 pass, 0 fail
+  - Phase 5:
+    - ISC-22: `rg "console.log.*Password\|Password:" app.js` — no raw password in stdout; setup URL printed instead; `rg "admin_password_hash" app.js` — hash stored in app_settings
+    - ISC-23: `rg "signResetToken\|verifyResetToken" routes/auth.js` — functions exist; reset email sends signed URL with token + sig + expiry; backward-compatible when sig omitted
+    - ISC-24: `rg "VALID_MODELS" lib/config.js` — only deprecated alias remains; `rg "ACTIVE_MODEL_IDS" lib/config.js lib/judge.js routes/fire.js` — new name adopted
+    - ISC-25: `rg "analyticsAuth" routes/ lib/ app.js` — 0 hits; `rg "requireAdminAccess" routes/ lib/ app.js` — found in all route files and app.js
+    - ISC-26: `rg "trigger=cron" routes/fire.js` — query param check found; skip-if-already-run logic queries analysis_runs for today's challenge
+    - ISC-27: `rg "/api/blind-mapping" routes/fire.js` — endpoint exists; generates server-side A→model mapping with random shuffle
+    - ISC-28: `rg "SIGTERM\|SIGINT\|shutdown" server.js` — handlers present; metrics save, webhook flush, server close, SQLite close, 10s timeout
+    - ISC-29: `npm test` — 96/96 pass, 0 fail
 
 <!--
-Project ISA for CSB. E3 structure (Problem, Vision, Out of Scope, Constraints, Goal, Criteria, Features, Test Strategy). 32 ISCs across 5 phases. Phases 1-4 complete. Phase 5 pending.
+Project ISA for CSB. E3 structure (Problem, Vision, Out of Scope, Constraints, Goal, Criteria, Features, Test Strategy). 32 ISCs across 5 phases. All phases complete.
 -->

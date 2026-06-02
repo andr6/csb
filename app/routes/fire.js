@@ -8,7 +8,7 @@ const {
   JUDGE_PROVIDER: _JUDGE_PROVIDER,
   JUDGE_MODEL: _JUDGE_MODEL,
   MODEL_MAP: _MODEL_MAP,
-  VALID_MODELS: _VALID_MODELS,
+  ACTIVE_MODEL_IDS: _ACTIVE_MODEL_IDS,
   JUDGE_RUNS: _JUDGE_RUNS,
   WEBHOOK_URL: _WEBHOOK_URL,
   DAILY_CHALLENGE_PROMPT: _DAILY_CHALLENGE_PROMPT,
@@ -31,7 +31,7 @@ function createFireRouter(deps) {
   const JUDGE_PROVIDER = deps.JUDGE_PROVIDER !== undefined ? deps.JUDGE_PROVIDER : _JUDGE_PROVIDER;
   const JUDGE_MODEL = deps.JUDGE_MODEL !== undefined ? deps.JUDGE_MODEL : _JUDGE_MODEL;
   const MODEL_MAP = deps.MODEL_MAP !== undefined ? deps.MODEL_MAP : _MODEL_MAP;
-  const VALID_MODELS = deps.VALID_MODELS !== undefined ? deps.VALID_MODELS : _VALID_MODELS;
+  const ACTIVE_MODEL_IDS = deps.ACTIVE_MODEL_IDS !== undefined ? deps.ACTIVE_MODEL_IDS : _ACTIVE_MODEL_IDS;
   const JUDGE_RUNS = deps.JUDGE_RUNS !== undefined ? deps.JUDGE_RUNS : _JUDGE_RUNS;
   const WEBHOOK_URL = deps.WEBHOOK_URL !== undefined ? deps.WEBHOOK_URL : _WEBHOOK_URL;
   const DAILY_CHALLENGE_PROMPT = deps.DAILY_CHALLENGE_PROMPT !== undefined ? deps.DAILY_CHALLENGE_PROMPT : _DAILY_CHALLENGE_PROMPT;
@@ -62,7 +62,7 @@ function createFireRouter(deps) {
   const judgeLimiter = deps.judgeLimiter;
   const publicLimiter = deps.publicLimiter;
   const authMw = deps.authMiddleware;
-  const analyticsAuth = deps.analyticsAuth;
+  const requireAdminAccess = deps.requireAdminAccess;
   const requireKnownOrigin = deps.requireKnownOrigin;
 
   const judgeRunsOverride = deps.judgeRuns;
@@ -276,7 +276,7 @@ function createFireRouter(deps) {
     }
   });
 
-  router.get("/api/runs", authMw.requireAuth, analyticsAuth, function(req, res) {
+  router.get("/api/runs", authMw.requireAuth, requireAdminAccess, function(req, res) {
     const filters = buildRunFilters(req.query);
     res.json({
       items: listAnalysisRuns(filters),
@@ -284,7 +284,7 @@ function createFireRouter(deps) {
     });
   });
 
-  router.get("/api/runs/export", authMw.requireAuth, analyticsAuth, function(req, res) {
+  router.get("/api/runs/export", authMw.requireAuth, requireAdminAccess, function(req, res) {
     const filters = buildRunFilters(req.query);
     const format = String(req.query.format || "json").toLowerCase();
     const items = listAnalysisRuns({
@@ -302,7 +302,7 @@ function createFireRouter(deps) {
     res.send(JSON.stringify({ items: items, total: items.length, exportedAt: new Date().toISOString() }, null, 2));
   });
 
-  router.get("/api/runs/:id", authMw.requireAuth, analyticsAuth, function(req, res) {
+  router.get("/api/runs/:id", authMw.requireAuth, requireAdminAccess, function(req, res) {
     const item = getAnalysisRun(req.params.id);
     if (!item) {
       return res.status(404).json({ error: "Run not found." });
@@ -327,8 +327,8 @@ function createFireRouter(deps) {
     const err = validatePrompt(prompt);
     if (err) return res.status(400).json({ error: err });
 
-    console.log("[DEBUG] modelId:", modelId, "VALID_MODELS:", VALID_MODELS);
-    if (!VALID_MODELS.includes(modelId)) {
+    console.log("[DEBUG] modelId:", modelId, "ACTIVE_MODEL_IDS:", ACTIVE_MODEL_IDS);
+    if (!ACTIVE_MODEL_IDS.includes(modelId)) {
       return res.status(400).json({ error: "Invalid model ID." });
     }
 
@@ -480,20 +480,38 @@ function createFireRouter(deps) {
   });
 
   // F9 — daily challenge (fire all models + judge in background)
-  router.post("/api/challenge", authMw.requireAuth, analyticsAuth, async function(req, res) {
+  router.post("/api/challenge", authMw.requireAuth, requireAdminAccess, async function(req, res) {
     const prompt = DAILY_CHALLENGE_PROMPT || (req.body && req.body.prompt) || "";
     if (!prompt) return res.status(400).json({ error: "No challenge prompt. Set DAILY_CHALLENGE_PROMPT in .env or pass prompt in body." });
     const err = validatePrompt(prompt);
     if (err) return res.status(400).json({ error: err });
 
-    res.json({ started: true, prompt: prompt, models: VALID_MODELS });
+    // Cron skip-if-already-run: if trigger=cron and a challenge already ran today, skip
+    const isCron = String(req.query.trigger || "").toLowerCase() === "cron";
+    if (isCron) {
+      try {
+        const { queryJsonParams } = require("../lib/sqlite");
+        const today = new Date().toISOString().slice(0, 10);
+        const rows = queryJsonParams(
+          "SELECT 1 FROM analysis_runs WHERE is_challenge = 1 AND created_at >= ? AND created_at < ? LIMIT 1;",
+          [today + "T00:00:00.000Z", today + "T23:59:59.999Z"]
+        );
+        if (rows.length) {
+          return res.json({ skipped: true, reason: "Daily challenge already ran today." });
+        }
+      } catch (e) {
+        // If SQLite is unavailable, proceed anyway
+      }
+    }
+
+    res.json({ started: true, prompt: prompt, models: ACTIVE_MODEL_IDS });
 
     setImmediate(async function() {
       const startedAt = Date.now();
       const execModels = {};
       const allResponses = {};
       try {
-        await Promise.all(VALID_MODELS.map(async function(modelId) {
+        await Promise.all(ACTIVE_MODEL_IDS.map(async function(modelId) {
           const t = Date.now();
           try {
             const resp = await callContestant(modelId, getVoice(modelId), prompt, req.requestId);
@@ -508,8 +526,8 @@ function createFireRouter(deps) {
         const raw = await callJudge(getPack("bar").judgeSystemPrompt, buildJudgePrompt(prompt, allResponses), req.requestId);
         const judgeMs = Date.now() - judgeStart;
         const payload = normalizeJudgePayload(parseJudgeResponse(raw), Object.keys(allResponses));
-        const successCount = VALID_MODELS.filter(function(id) { return execModels[id] && execModels[id].status === "success"; }).length;
-        const overallStatus = successCount === VALID_MODELS.length ? "success" : successCount > 0 ? "partial_failure" : "failure";
+        const successCount = ACTIVE_MODEL_IDS.filter(function(id) { return execModels[id] && execModels[id].status === "success"; }).length;
+        const overallStatus = successCount === ACTIVE_MODEL_IDS.length ? "success" : successCount > 0 ? "partial_failure" : "failure";
         addAnalysisRun({
           prompt: prompt,
           responses: allResponses,
@@ -529,6 +547,20 @@ function createFireRouter(deps) {
         addAnalysisRun(buildFailureRun(prompt, allResponses, { timings: { totalMs: Date.now() - startedAt }, execution: { models: execModels } }, "judge_call", e));
       }
     });
+  });
+
+  // Blind taste test mapping — generated server-side, tamper-proof
+  router.get("/api/blind-mapping", authMw.requireAuth, function(req, res) {
+    try {
+      const shuffled = ACTIVE_MODEL_IDS.slice().sort(function() { return Math.random() - 0.5; });
+      const mapping = {};
+      shuffled.forEach(function(id, i) {
+        mapping[String.fromCharCode(65 + i)] = id; // A, B, C, ...
+      });
+      res.json({ mapping: mapping });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to generate blind mapping." });
+    }
   });
 
   return router;

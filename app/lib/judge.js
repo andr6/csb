@@ -1,4 +1,4 @@
-const { VALID_MODELS } = require("./config");
+const { ACTIVE_MODEL_IDS } = require("./config");
 const { clampScore } = require("./validation");
 const { getPack } = require("./packs");
 
@@ -68,7 +68,7 @@ function computeMedianScores(payloads, responseKeys) {
   if (!payloads || !payloads.length) return null;
   if (payloads.length === 1) return payloads[0];
 
-  const modelIds = (Array.isArray(responseKeys) && responseKeys.length) ? responseKeys : VALID_MODELS;
+  const modelIds = (Array.isArray(responseKeys) && responseKeys.length) ? responseKeys : ACTIVE_MODEL_IDS;
   const medianScores = {};
   const confidence = {};
 
@@ -158,7 +158,7 @@ function validateJudgePayload(judgement, responseKeys) {
     throw new Error("Judge payload validation failed: payload is not an object.");
   }
 
-  const modelIds = (Array.isArray(responseKeys) && responseKeys.length) ? responseKeys : VALID_MODELS;
+  const modelIds = (Array.isArray(responseKeys) && responseKeys.length) ? responseKeys : ACTIVE_MODEL_IDS;
   if (!modelIds.length) {
     throw new Error("Judge payload validation failed: no model IDs to validate against.");
   }
@@ -188,7 +188,7 @@ function validateJudgePayload(judgement, responseKeys) {
 }
 
 function normalizeJudgePayload(judgement, responseKeys) {
-  if (!VALID_MODELS.length) {
+  if (!ACTIVE_MODEL_IDS.length) {
     throw new Error("No valid models configured. Check ACTIVE_MODELS in .env.");
   }
   if (!judgement || typeof judgement !== "object") {
@@ -200,7 +200,7 @@ function normalizeJudgePayload(judgement, responseKeys) {
 
   // Scope to responseKeys when provided (VERSUS/CUSTOM modes) — prevents zero-score
   // pollution of analytics for models that didn't participate in a run.
-  const modelIds = (Array.isArray(responseKeys) && responseKeys.length) ? responseKeys : VALID_MODELS;
+  const modelIds = (Array.isArray(responseKeys) && responseKeys.length) ? responseKeys : ACTIVE_MODEL_IDS;
 
   const scores = {};
   const verdicts = {};

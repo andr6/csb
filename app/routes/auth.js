@@ -445,6 +445,19 @@ function createAuthRouter(deps) {
     res.json({ ok: true, message: "Name updated successfully.", name: newName });
   });
 
+  // ── Signed URL helpers for password reset ───────────────────────────────
+  function signResetToken(token, expiresAt) {
+    const secret = process.env.RESET_SECRET || process.env.PAGE_TOKEN_SECRET || crypto.randomBytes(32).toString("hex");
+    const payload = token + "|" + expiresAt;
+    return crypto.createHmac("sha256", secret).update(payload).digest("hex");
+  }
+  function verifyResetToken(token, expiresAt, signature) {
+    const expected = signResetToken(token, expiresAt);
+    const aBuf = Buffer.from(signature, "hex");
+    const eBuf = Buffer.from(expected, "hex");
+    return aBuf.length === eBuf.length && crypto.timingSafeEqual(aBuf, eBuf);
+  }
+
   // ── Forgot password ───────────────────────────────────────────────────────
   router.post("/api/auth/forgot-password", otpResendLimiter, requireKnownOrigin, async function(req, res) {
     const email = String(req.body.email || "").trim().toLowerCase();
@@ -464,6 +477,10 @@ function createAuthRouter(deps) {
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
     resetRepo.createToken({ userId: user.id, tokenHash: resetHash, expiresAt });
 
+    // Build signed URL
+    const sig = signResetToken(resetToken, expiresAt);
+    const resetUrl = "/reset-password?t=" + encodeURIComponent(resetToken) + "&s=" + sig + "&e=" + encodeURIComponent(expiresAt);
+
     // Log event with no sensitive data
     auditLog.insert("password_reset_requested", user.id);
 
@@ -474,13 +491,13 @@ function createAuthRouter(deps) {
           from: MAIL_FROM || MAIL_USER,
           to: email,
           subject: "Password reset request",
-          text: "A password reset was requested. Use this token: " + resetToken + "\nThis token expires in 1 hour.",
+          text: "A password reset was requested. Use this link to reset your password: " + resetUrl + "\nThis link expires in 1 hour.",
         });
       } catch (e) {
         console.error("[auth] Password reset email failed:", e.message);
       }
     } else {
-      console.log("[auth] Mock password reset email to", email, ": token =", resetToken);
+      console.log("[auth] Mock password reset email to", email, ":", resetUrl);
     }
 
     res.json({ ok: true, message: "If this account exists, a password reset link has been sent." });
@@ -489,10 +506,21 @@ function createAuthRouter(deps) {
   // ── Reset password ────────────────────────────────────────────────────────
   router.post("/api/auth/reset-password", otpVerifyLimiter, requireKnownOrigin, async function(req, res) {
     const token = String(req.body.token || "").trim();
+    const signature = String(req.body.signature || "").trim();
+    const expiresAt = String(req.body.expiresAt || "").trim();
     const password = String(req.body.password || "");
     const confirmPassword = String(req.body.confirmPassword || "");
 
     if (!token) return res.status(400).json({ error: "Reset token required." });
+
+    // Signed URL validation (new flow) — if signature and expiresAt provided, validate them
+    if (signature && expiresAt) {
+      if (new Date(expiresAt) < new Date()) return res.status(400).json({ error: "Reset link has expired." });
+      if (!verifyResetToken(token, expiresAt, signature)) {
+        return res.status(400).json({ error: "Invalid reset signature." });
+      }
+    }
+
     if (!authService.validatePasswordPolicy(password)) {
       return res.status(400).json({ error: authService.getPasswordPolicyError() });
     }

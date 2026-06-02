@@ -35,7 +35,7 @@ const { createSessionRepository } = require("./lib/repositories/sessionRepositor
 const { createPasswordResetRepository } = require("./lib/repositories/passwordResetRepository");
 const authService = require("./lib/authService");
 const { createAuthMiddleware } = require("./lib/middleware/authMiddleware");
-const { createAnalyticsAuth } = require("./lib/middleware/analyticsAuth");
+const { createRequireAdminAccess } = require("./lib/middleware/requireAdminAccess");
 const { createLeaderboardService } = require("./lib/leaderboard");
 const { createRateLimiters, tryCreateStore } = require("./lib/rateLimiters");
 const nodemailer = require("nodemailer");
@@ -131,11 +131,21 @@ function createApp(overrides) {
     ? { requireAuth: function(req, res, next) { next(); }, requirePhoneVerified: function(req, res, next) { next(); }, requireCustomModeAccess: function(req, res, next) { next(); } }
     : createAuthMiddleware({ userRepository: userRepo, sessionRepository: sessionRepo }));
 
-  // Admin user seed
+  // Admin user seed — one-time setup with signed URL (no raw password in stdout)
   async function seedAdminUser() {
     if (process.env.NODE_ENV === "test") return;
     const existing = userRepo.findByEmail(ADMIN_EMAIL);
     if (existing) return;
+
+    // Check if setup was already completed
+    try {
+      const { queryJsonParams } = require("./lib/sqlite");
+      const setupRows = queryJsonParams("SELECT value FROM app_settings WHERE key = ?", ["admin_setup_complete"]);
+      if (setupRows.length && setupRows[0].value === "1") return;
+    } catch (e) {
+      // app_settings may not exist yet — migration will create it
+    }
+
     const generatedPassword = crypto.randomBytes(8).toString("hex");
     const passwordHash = await authService.hashPassword(generatedPassword);
     const userId = userRepo.createUser({
@@ -150,10 +160,22 @@ function createApp(overrides) {
       "UPDATE users SET email_verified = 1, phone_verified = 1, first_login_completed = 1, custom_mode_access_enabled = 1, updated_at = ? WHERE id = ?",
       [now, userId]
     );
+
+    // Store hash in app_settings so password can be rotated without re-printing
+    runSqlParams(
+      "INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)",
+      ["admin_password_hash", passwordHash]
+    );
+
+    // Generate one-time setup token with HMAC signature
+    const setupToken = crypto.randomBytes(16).toString("hex");
+    const setupSig = crypto.createHmac("sha256", process.env.SETUP_SECRET || PAGE_TOKEN_SECRET).update(setupToken).digest("hex");
+    const setupUrl = "/admin-setup?t=" + setupToken + "&s=" + setupSig;
+
     console.log("=".repeat(60));
     console.log("ADMIN USER CREATED");
     console.log("Email:    " + ADMIN_EMAIL);
-    console.log("Password: " + generatedPassword);
+    console.log("One-time setup URL: " + setupUrl);
     console.log("=".repeat(60));
     console.log(JSON.stringify({ type: "security", event: "admin_user_seeded", userId: userId }));
   }
@@ -197,7 +219,7 @@ function createApp(overrides) {
   }
 
   // Analytics auth middleware
-  const analyticsAuth = createAnalyticsAuth({
+  const requireAdminAccess = createRequireAdminAccess({
     sessionRepository: sessionRepo,
     userRepository: userRepo,
     adminEmail: ADMIN_EMAIL,
@@ -262,7 +284,7 @@ function createApp(overrides) {
   });
   app.use(cors(buildCorsOptions()));
   app.get("/", sendIndex);
-  app.get("/analytics", authFailLimiter, analyticsAuth, sendIndex);
+  app.get("/analytics", authFailLimiter, requireAdminAccess, sendIndex);
   app.use(express.static(path.join(__dirname, "public")));
 
   // Route modules
@@ -297,7 +319,7 @@ function createApp(overrides) {
   app.use(createFireRouter({
     ...deps,
     authMiddleware: authMw,
-    analyticsAuth,
+    requireAdminAccess,
     fireLimiter,
     judgeLimiter,
     publicLimiter,
@@ -310,7 +332,7 @@ function createApp(overrides) {
   app.use(createAnalyticsRouter({
     ...deps,
     authMiddleware: authMw,
-    analyticsAuth,
+    requireAdminAccess,
     _analyticsCache,
     _failuresCache,
   }));
@@ -318,7 +340,7 @@ function createApp(overrides) {
   app.use(createPromptsRouter({
     ...deps,
     authMiddleware: authMw,
-    analyticsAuth,
+    requireAdminAccess,
     publicLimiter,
     tryCreateStore,
   }));
@@ -332,7 +354,7 @@ function createApp(overrides) {
   app.use(createHealthRouter({
     ...deps,
     authMiddleware: authMw,
-    analyticsAuth,
+    requireAdminAccess,
     checkProviderHealth: deps.checkProviderHealth || providerServices.checkProviderHealth,
   }));
 

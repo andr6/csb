@@ -1,7 +1,7 @@
 const crypto = require("crypto");
 
-function createAnalyticsAuth({ sessionRepository, userRepository, adminEmail, analyticsPagePassword }) {
-  return function analyticsAuth(req, res, next) {
+function createRequireAdminAccess({ sessionRepository, userRepository, adminEmail, analyticsPagePassword }) {
+  return function requireAdminAccess(req, res, next) {
     const authHeader = String(req.headers.authorization || "");
 
     // Bearer path: admin session grants analytics access
@@ -55,4 +55,4 @@ function createAnalyticsAuth({ sessionRepository, userRepository, adminEmail, an
   };
 }
 
-module.exports = { createAnalyticsAuth };
+module.exports = { createRequireAdminAccess };

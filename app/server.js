@@ -36,7 +36,58 @@ function startServer() {
 }
 
 if (require.main === module) {
-  startServer();
+  const server = startServer();
+
+  // Graceful shutdown — SIGTERM / SIGINT
+  function shutdown(signal) {
+    console.log("[" + signal + "] Shutting down gracefully...");
+
+    // Save metrics snapshot
+    try {
+      metricsServices.saveMetrics(metricsServices.defaultStore);
+      console.log("[shutdown] Metrics snapshot saved.");
+    } catch (e) {
+      console.warn("[shutdown] Metrics save failed:", e.message);
+    }
+
+    // Stop webhook processor
+    try {
+      const { processWebhookQueue } = require("./lib/webhookQueue");
+      processWebhookQueue().catch(function() {});
+      console.log("[shutdown] Webhook queue flushed.");
+    } catch (e) {
+      console.warn("[shutdown] Webhook flush failed:", e.message);
+    }
+
+    // Close HTTP server
+    server.close(function() {
+      console.log("[shutdown] HTTP server closed.");
+
+      // Close SQLite
+      try {
+        const { getDb } = require("./lib/sqlite");
+        const db = getDb();
+        if (db && db.close) {
+          db.close();
+          console.log("[shutdown] SQLite closed.");
+        }
+      } catch (e) {
+        console.warn("[shutdown] SQLite close failed:", e.message);
+      }
+
+      console.log("[shutdown] Done.");
+      process.exit(0);
+    });
+
+    // Force exit after 10s if something hangs
+    setTimeout(function() {
+      console.error("[shutdown] Forced exit after 10s timeout.");
+      process.exit(1);
+    }, 10000);
+  }
+
+  process.on("SIGTERM", function() { shutdown("SIGTERM"); });
+  process.on("SIGINT", function() { shutdown("SIGINT"); });
 }
 
 module.exports = {

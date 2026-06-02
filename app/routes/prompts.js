@@ -5,7 +5,7 @@ function createPromptsRouter(deps) {
   const router = express.Router();
 
   const authMw = deps.authMiddleware;
-  const analyticsAuth = deps.analyticsAuth;
+  const requireAdminAccess = deps.requireAdminAccess;
   const publicLimiter = deps.publicLimiter;
   const validatePrompt = deps.validatePrompt || require("../lib/validation").validatePrompt;
   const pendingPrompts = deps.pendingPrompts || require("../lib/repositories/pendingPromptsRepository");
@@ -40,7 +40,7 @@ function createPromptsRouter(deps) {
     }
   });
 
-  router.get("/api/prompts/pending", authMw.requireAuth, analyticsAuth, function(req, res) {
+  router.get("/api/prompts/pending", authMw.requireAuth, requireAdminAccess, function(req, res) {
     try {
       res.json({ items: pendingPrompts.listPending() });
     } catch (e) {
@@ -48,7 +48,7 @@ function createPromptsRouter(deps) {
     }
   });
 
-  router.post("/api/prompts/:id/approve", authMw.requireAuth, analyticsAuth, function(req, res) {
+  router.post("/api/prompts/:id/approve", authMw.requireAuth, requireAdminAccess, function(req, res) {
     try {
       pendingPrompts.approvePrompt(req.params.id);
       res.json({ ok: true });
@@ -57,7 +57,7 @@ function createPromptsRouter(deps) {
     }
   });
 
-  router.post("/api/prompts/:id/reject", authMw.requireAuth, analyticsAuth, function(req, res) {
+  router.post("/api/prompts/:id/reject", authMw.requireAuth, requireAdminAccess, function(req, res) {
     try {
       pendingPrompts.rejectPrompt(req.params.id);
       res.json({ ok: true });
