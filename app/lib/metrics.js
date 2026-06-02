@@ -91,6 +91,73 @@ function startAutoSave(store, intervalMs) {
   return timer;
 }
 
+function rollupMetrics() {
+  try {
+    const { runSqlParams, queryJson, runSql } = require("./sqlite");
+    const now = new Date();
+    const hour = now.toISOString().slice(0, 13) + ":00:00.000Z";
+    const hourStart = hour;
+    const hourEnd = now.toISOString();
+
+    const rows = queryJson(
+      "SELECT data_json FROM metrics_snapshots WHERE snapshot_at >= '" + hourStart + "' AND snapshot_at < '" + hourEnd + "' ORDER BY snapshot_at ASC;"
+    );
+    if (!rows.length) return;
+
+    let totalRequests = 0;
+    let apiRequests = 0;
+    let errors5xx = 0;
+    const routeAgg = {};
+
+    rows.forEach(function(row) {
+      const data = JSON.parse(row.data_json);
+      totalRequests += Number(data.requests || 0);
+      apiRequests += Number(data.apiRequests || 0);
+      errors5xx += Number(data.errors5xx || 0);
+      const stats = data.routeStats || {};
+      Object.keys(stats).forEach(function(key) {
+        const s = stats[key];
+        if (!routeAgg[key]) {
+          routeAgg[key] = { count: 0, errors5xx: 0, maxMs: 0, totalMs: 0 };
+        }
+        routeAgg[key].count += Number(s.count || 0);
+        routeAgg[key].errors5xx += Number(s.errors5xx || 0);
+        routeAgg[key].maxMs = Math.max(routeAgg[key].maxMs, Number(s.maxMs || 0));
+        routeAgg[key].totalMs += Number(s.avgMs || 0) * Number(s.count || 0);
+      });
+    });
+
+    // Compute averages
+    Object.keys(routeAgg).forEach(function(key) {
+      const agg = routeAgg[key];
+      agg.avgMs = agg.count ? Math.round((agg.totalMs / agg.count) * 100) / 100 : 0;
+      delete agg.totalMs;
+    });
+
+    runSqlParams(
+      "INSERT OR REPLACE INTO metrics_hourly (hour, total_requests, api_requests, errors_5xx, route_stats_json) VALUES (?, ?, ?, ?, ?)",
+      [hour, totalRequests, apiRequests, errors5xx, JSON.stringify(routeAgg)]
+    );
+
+    // Prune snapshots older than 7 days after successful rollup
+    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    runSql(
+      "DELETE FROM metrics_snapshots WHERE snapshot_at < '" + cutoff + "';"
+    );
+  } catch (e) {
+    console.warn("[metrics] rollup failed:", e.message);
+  }
+}
+
+function startHourlyRollup(intervalMs) {
+  const ms = Number(intervalMs || 60 * 60 * 1000);
+  const timer = setInterval(rollupMetrics, ms);
+  if (timer.unref) timer.unref();
+  // Run once shortly after startup to catch any lingering snapshots
+  setTimeout(rollupMetrics, 5000);
+  return timer;
+}
+
 module.exports = {
   createMetricsStore: createMetricsStore,
   recordRequest: recordRequest,
@@ -98,4 +165,6 @@ module.exports = {
   saveMetrics: saveMetrics,
   loadMetrics: loadMetrics,
   startAutoSave: startAutoSave,
+  rollupMetrics: rollupMetrics,
+  startHourlyRollup: startHourlyRollup,
 };

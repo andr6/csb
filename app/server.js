@@ -16,6 +16,7 @@ const app = createApp();
 function startServer() {
   return app.listen(PORT, function() {
     metricsServices.startAutoSave(metricsServices.defaultStore, 5 * 60 * 1000);
+    metricsServices.startHourlyRollup(60 * 60 * 1000);
     if (WEBHOOK_URL) {
       startWebhookProcessor(30000);
       console.log("  Webhook processor   : enabled (" + WEBHOOK_URL + ")");
