@@ -13,6 +13,7 @@ function createRunRouter(deps) {
     let html = fs.readFileSync(htmlPath, "utf8");
     const title = "CSB Run — " + (run.crownModelId || "unknown") + " took the crown";
     const desc = "Prompt: " + (run.prompt || "").slice(0, 160);
+    const runUrl = (req.protocol + "://" + req.get("host") + "/run/" + encodeURIComponent(req.params.id));
     html = html.replace("<title>CSB — Chat Shit Bob</title>", "<title>" + title + "</title>");
     html = html.replace(
       '<meta property="og:description" content="The AI benchmarking show nobody asked for. We rank which LLM gave the sh*ttest answer.">',
@@ -21,6 +22,11 @@ function createRunRouter(deps) {
     html = html.replace(
       '<meta property="og:title" content="CSB — Chat Shit Bob">',
       '<meta property="og:title" content="' + title + '">'
+    );
+    html = html.replace('<meta property="og:image" content="/assets/glove.jpg">', '');
+    html = html.replace(
+      '<meta property="og:type" content="website">',
+      '<meta property="og:type" content="website">\n    <meta property="og:url" content="' + runUrl + '">\n    <meta property="og:image" content="/assets/glove.jpg">'
     );
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.send(html);

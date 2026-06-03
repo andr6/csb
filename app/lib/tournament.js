@@ -3,7 +3,7 @@ const crypto = require("crypto");
 function shuffleArray(arr) {
   const result = arr.slice();
   for (var i = result.length - 1; i > 0; i--) {
-    var j = Math.floor(Math.random() * (i + 1));
+    var j = crypto.randomInt(0, i + 1);
     var tmp = result[i];
     result[i] = result[j];
     result[j] = tmp;

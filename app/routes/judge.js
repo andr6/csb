@@ -1,0 +1,167 @@
+const express = require("express");
+const { validatePageToken, buildFailureRun } = require("../lib/fireHelpers");
+
+function createJudgeRouter(deps) {
+  const router = express.Router();
+
+  const authMw = deps.authMiddleware;
+  const requireKnownOrigin = deps.requireKnownOrigin;
+  const judgeLimiter = deps.judgeLimiter;
+
+  const {
+    JUDGE_PROVIDER: _JUDGE_PROVIDER,
+    JUDGE_MODEL: _JUDGE_MODEL,
+    JUDGE_RUNS: _JUDGE_RUNS,
+    WEBHOOK_URL: _WEBHOOK_URL,
+  } = require("../lib/config");
+
+  const judgeServices = require("../lib/judge");
+  const providerServices = require("../lib/providers");
+  const { getPack: _getPack } = require("../lib/packs");
+  const { validatePrompt: _validatePrompt } = require("../lib/validation");
+  const analysisRunServices = require("../lib/analysisRuns");
+  const { notifyWebhook: _notifyWebhook } = require("../lib/webhook");
+
+  const JUDGE_PROVIDER = deps.JUDGE_PROVIDER !== undefined ? deps.JUDGE_PROVIDER : _JUDGE_PROVIDER;
+  const JUDGE_MODEL = deps.JUDGE_MODEL !== undefined ? deps.JUDGE_MODEL : _JUDGE_MODEL;
+  const JUDGE_RUNS = deps.JUDGE_RUNS !== undefined ? deps.JUDGE_RUNS : _JUDGE_RUNS;
+  const WEBHOOK_URL = deps.WEBHOOK_URL !== undefined ? deps.WEBHOOK_URL : _WEBHOOK_URL;
+  const getPack = deps.getPack || _getPack;
+  const VALID_CRITERIA_KEYS = deps.VALID_CRITERIA_KEYS !== undefined ? deps.VALID_CRITERIA_KEYS : judgeServices.VALID_CRITERIA_KEYS;
+
+  const callJudge = deps.callJudge || providerServices.callJudge;
+  const buildJudgePrompt = deps.buildJudgePrompt || judgeServices.buildJudgePrompt;
+  const computeMedianScores = deps.computeMedianScores || judgeServices.computeMedianScores;
+  const parseJudgeResponse = deps.parseJudgeResponse || judgeServices.parseJudgeResponse;
+  const normalizeJudgePayload = deps.normalizeJudgePayload || judgeServices.normalizeJudgePayload;
+  const validatePrompt = deps.validatePrompt || _validatePrompt;
+  const addAnalysisRun = deps.addAnalysisRun || analysisRunServices.addAnalysisRun;
+  const listTopAnalysisRunsByScore = deps.listTopAnalysisRunsByScore || analysisRunServices.listTopAnalysisRunsByScore;
+  const notifyWebhookFn = deps.notifyWebhook || _notifyWebhook;
+
+  const dailyLimitExceeded = deps.dailyLimitExceeded || function() { return false; };
+  const dailyIncrement = deps.dailyIncrement || function() {};
+  const judgeRunsOverride = deps.judgeRuns;
+
+  function invalidateAnalyticsCaches() {
+    if (deps.invalidateAnalyticsCaches) {
+      return deps.invalidateAnalyticsCaches();
+    }
+  }
+
+  const providerInfo = {
+    contestantProvider: deps.CONTESTANT_PROVIDER !== undefined ? deps.CONTESTANT_PROVIDER : require("../lib/config").CONTESTANT_PROVIDER,
+    judgeProvider: JUDGE_PROVIDER,
+    judgeModel: JUDGE_MODEL,
+  };
+
+  router.post("/api/judge", judgeLimiter, authMw.requireAuth, requireKnownOrigin, async function(req, res) {
+    const validateToken = deps.validatePageToken || validatePageToken;
+    if (!validateToken(req.headers["x-page-token"])) {
+      return res.status(403).json({ error: "Forbidden." });
+    }
+
+    if ((deps.dailyLimitExceeded || dailyLimitExceeded)("judge")) {
+      return res.status(503).json({ error: "Daily request limit reached. Try again tomorrow." });
+    }
+
+    const prompt = req.body.prompt;
+    const responses = req.body.responses;
+    const meta = req.body.meta && typeof req.body.meta === "object" ? req.body.meta : {};
+    const rawCriteria = req.body.criteria;
+    const criteria = Array.isArray(rawCriteria)
+      ? rawCriteria.filter(function(k) { return VALID_CRITERIA_KEYS.indexOf(k) !== -1; })
+      : null;
+    const activePackId = req.body.pack || "bar";
+    const activeMode = req.body.mode || "absurd";
+    const activePack = getPack(activePackId);
+    const activeJudgePrompt = deps.judgeSystemPrompt || activePack.judgeSystemPrompt;
+
+    const err = validatePrompt(prompt);
+    if (err) return res.status(400).json({ error: err });
+
+    if (!responses || typeof responses !== "object") {
+      return res.status(400).json({ error: "Responses object required." });
+    }
+
+    // Strip error responses — models that failed shouldn't be judged
+    const cleanResponses = Object.fromEntries(
+      Object.entries(responses).filter(function(entry) {
+        var v = entry[1];
+        return typeof v === "string" && v.trim().length > 0 && !v.startsWith("[Error:");
+      })
+    );
+    if (Object.keys(cleanResponses).length === 0) {
+      return res.status(400).json({ error: "No successful model responses to judge." });
+    }
+
+    const judgeRuns = judgeRunsOverride !== undefined ? Number(judgeRunsOverride) : JUDGE_RUNS;
+
+    try {
+      const judgePrompt = buildJudgePrompt(prompt, cleanResponses, criteria || undefined);
+      const rawResults = await Promise.all(
+        Array.from({ length: judgeRuns }, function() {
+          return callJudge(activeJudgePrompt, judgePrompt, req.requestId);
+        })
+      );
+
+      const responseKeys = Object.keys(cleanResponses);
+      const parsedResults = rawResults.map(function(raw) {
+        return normalizeJudgePayload(parseJudgeResponse(raw), responseKeys);
+      });
+      const raw = rawResults[0];
+
+      try {
+        const payload = judgeRuns > 1 ? computeMedianScores(parsedResults, responseKeys) : parsedResults[0];
+        const willNotify = deps.notifyWebhook !== undefined || !!WEBHOOK_URL;
+        const prevTopRun = willNotify ? (deps.listTopAnalysisRunsByScore || listTopAnalysisRunsByScore)(1)[0] : null;
+        const prevCrownModelId = prevTopRun ? prevTopRun.crownModelId : null;
+        const savedRun = addAnalysisRun({
+          prompt: prompt,
+          responses: responses,
+          judgement: payload,
+          crownModelId: payload.crown,
+          crownScore: payload.scores && payload.scores[payload.crown] !== undefined ? payload.scores[payload.crown] : 0,
+          contestantProvider: providerInfo.contestantProvider,
+          judgeProvider: providerInfo.judgeProvider,
+          judgeModel: providerInfo.judgeModel,
+          timings: meta.timings,
+          pack: activePackId,
+          mode: activeMode,
+          execution: (function() {
+            var ext = Object.assign({}, meta.execution || {});
+            if (criteria && criteria.length) ext.criteria = criteria;
+            if (judgeRuns > 1) ext.judgeRuns = judgeRuns;
+            if (payload.judgeConfidence) ext.judgeConfidence = payload.judgeConfidence;
+            if (meta.blindMapping) ext.blindMapping = meta.blindMapping;
+            return ext;
+          }()),
+        });
+        invalidateAnalyticsCaches();
+        if (willNotify) {
+          const newTopRun = (deps.listTopAnalysisRunsByScore || listTopAnalysisRunsByScore)(1)[0];
+          const newCrownModelId = newTopRun ? newTopRun.crownModelId : null;
+          if (newCrownModelId && newCrownModelId !== prevCrownModelId) {
+            notifyWebhookFn({ type: "crown_change", newCrown: newCrownModelId, prevCrown: prevCrownModelId, prompt: prompt, score: newTopRun.crownScore });
+          }
+        }
+        (deps.dailyIncrement || dailyIncrement)("judge");
+        if (meta.blindMapping) payload.blindMapping = meta.blindMapping;
+        payload.runId = savedRun.id;
+        res.json(payload);
+      } catch (e) {
+        const savedRun = addAnalysisRun(buildFailureRun(prompt, responses, meta, "judge_parse", e, raw, activePackId, activeMode, providerInfo));
+        console.error("[judge] JSON parse failed. Raw:", String(raw || "").slice(0, 300));
+        return res.status(500).json({ error: "Judge returned invalid JSON.", runId: savedRun.id });
+      }
+    } catch (e) {
+      const savedRun = addAnalysisRun(buildFailureRun(prompt, responses, meta, "judge_call", e, null, activePackId, activeMode, providerInfo));
+      console.error("[judge] via " + JUDGE_PROVIDER + " (" + JUDGE_MODEL + "):", e.message);
+      res.status(500).json({ error: "Judge failed.", runId: savedRun.id });
+    }
+  });
+
+  return router;
+}
+
+module.exports = { createJudgeRouter };

@@ -42,6 +42,9 @@ const nodemailer = require("nodemailer");
 
 const { createAuthRouter } = require("./routes/auth");
 const { createFireRouter } = require("./routes/fire");
+const { createRunsRouter } = require("./routes/runs");
+const { createJudgeRouter } = require("./routes/judge");
+const { createChallengeRouter } = require("./routes/challenge");
 const { createAnalyticsRouter } = require("./routes/analytics");
 const { createPromptsRouter } = require("./routes/prompts");
 const { createTournamentRouter } = require("./routes/tournament");
@@ -49,22 +52,8 @@ const { createHealthRouter } = require("./routes/health");
 const { createConfigRouter } = require("./routes/config");
 const { createRunRouter } = require("./routes/run");
 
-// ── Daily call circuit breaker ────────────────────────────────────────────────
-const DAILY_FIRE_LIMIT  = process.env.MAX_DAILY_FIRE_CALLS  ? Number(process.env.MAX_DAILY_FIRE_CALLS)  : 0;
-const DAILY_JUDGE_LIMIT = process.env.MAX_DAILY_JUDGE_CALLS ? Number(process.env.MAX_DAILY_JUDGE_CALLS) : 0;
-let _daily = { day: "", fire: 0, judge: 0 };
-
-function _dailyReset() {
-  const today = new Date().toISOString().slice(0, 10);
-  if (_daily.day !== today) _daily = { day: today, fire: 0, judge: 0 };
-}
-function dailyLimitExceeded(type) {
-  _dailyReset();
-  if (type === "fire"  && DAILY_FIRE_LIMIT  && _daily.fire  >= DAILY_FIRE_LIMIT)  return true;
-  if (type === "judge" && DAILY_JUDGE_LIMIT && _daily.judge >= DAILY_JUDGE_LIMIT) return true;
-  return false;
-}
-function dailyIncrement(type) { _dailyReset(); _daily[type] = (_daily[type] || 0) + 1; }
+// ── Daily call circuit breaker (SQLite-backed, survives restarts) ─────────────
+const { dailyLimitExceeded, dailyIncrement } = require("./lib/dailyLimits");
 
 // ── Page token ─ gates /api/fire and /api/judge to visitors who loaded the page ──
 const PAGE_TOKEN_SECRET = process.env.PAGE_TOKEN_SECRET || crypto.randomBytes(32).toString("hex");
@@ -91,7 +80,10 @@ function validatePageToken(token) {
   return eBuf.length === aBuf.length && crypto.timingSafeEqual(eBuf, aBuf);
 }
 
-// Rejects requests to mutating endpoints whose Origin/Referer doesn't match
+// Rejects requests whose Origin header doesn't match ALLOWED_ORIGINS.
+// For mutating methods (POST, PUT, DELETE, PATCH) the Origin header is
+// required — browsers always send it on cross-origin POSTs, so a missing
+// Origin is treated as a non-browser client and rejected.
 function requireKnownOrigin(req, res, next) {
   if (!ALLOWED_ORIGINS.length) return next();
   const origin = req.headers["origin"];
@@ -99,8 +91,9 @@ function requireKnownOrigin(req, res, next) {
     if (!isAllowedOrigin(origin)) return res.status(403).json({ error: "Forbidden." });
     return next();
   }
-  const referer = req.headers["referer"] || "";
-  if (referer && !ALLOWED_ORIGINS.some(function(o) { return referer.startsWith(o); })) {
+  // Origin is undefined. For safe methods we allow it (same-origin GETs,
+  // direct curl without Origin, etc.). For mutating methods we require it.
+  if (req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS") {
     return res.status(403).json({ error: "Forbidden." });
   }
   next();
@@ -319,14 +312,34 @@ function createApp(overrides) {
   app.use(createFireRouter({
     ...deps,
     authMiddleware: authMw,
-    requireAdminAccess,
-    fireLimiter,
-    judgeLimiter,
     publicLimiter,
+    fireLimiter,
+    requireKnownOrigin,
+    dailyLimitExceeded,
+    dailyIncrement,
+  }));
+
+  app.use(createRunsRouter({
+    ...deps,
+    authMiddleware: authMw,
+    requireAdminAccess,
+    publicLimiter,
+  }));
+
+  app.use(createJudgeRouter({
+    ...deps,
+    authMiddleware: authMw,
+    judgeLimiter,
     requireKnownOrigin,
     dailyLimitExceeded,
     dailyIncrement,
     invalidateAnalyticsCaches,
+  }));
+
+  app.use(createChallengeRouter({
+    ...deps,
+    authMiddleware: authMw,
+    requireAdminAccess,
   }));
 
   app.use(createAnalyticsRouter({

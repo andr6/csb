@@ -21,7 +21,10 @@ function startServer() {
       startWebhookProcessor(30000);
       console.log("  Webhook processor   : enabled (" + WEBHOOK_URL + ")");
     }
-    console.log("\n  CSB running on http://localhost:" + PORT);
+    if (!ALLOWED_ORIGINS.length && process.env.NODE_ENV === "production") {
+    console.warn("  [security] ALLOWED_ORIGINS is not set. Mutating endpoints will accept requests from any origin. Set ALLOWED_ORIGINS for production safety.");
+  }
+  console.log("\n  CSB running on http://localhost:" + PORT);
     console.log("  Contestant provider : " + CONTESTANT_PROVIDER);
     Object.keys(MODEL_MAP).forEach(function(id) {
       console.log("    " + id + " -> " + MODEL_MAP[id]);

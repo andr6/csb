@@ -6,8 +6,8 @@ const {
   JUDGE_PROVIDER,
   JUDGE_MODEL,
   MODEL_MAP,
-  PACKS,
 } = require("../lib/config");
+const { PACKS } = require("../lib/packs");
 const judgeServices = require("../lib/judge");
 
 function createConfigRouter(deps) {

@@ -15,7 +15,7 @@ function createHealthRouter(deps) {
   const requireAdminAccess = deps.requireAdminAccess;
   const checkProviderHealth = deps.checkProviderHealth || require("../lib/providers").checkProviderHealth;
 
-  router.get("/api/health", authMw.requireAuth, requireAdminAccess, async function(req, res) {
+  router.get("/api/health", async function(req, res) {
     const keyStatus = {};
     ["openrouter", "anthropic", "openai", "gemini", "litellm"].forEach(function(p) {
       keyStatus[p] = KEYS[p] ? "configured" : "missing";

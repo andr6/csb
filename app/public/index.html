@@ -7,6 +7,7 @@
 <meta property="og:title" content="CSB — Chat Shit Bob">
 <meta property="og:description" content="The AI benchmarking show nobody asked for. We rank which LLM gave the sh*ttest answer.">
 <meta property="og:type" content="website">
+<meta property="og:image" content="/assets/glove.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/x-icon" href="assets/glove.ico">
 <link rel="shortcut icon" type="image/x-icon" href="assets/glove.ico">
@@ -466,9 +467,11 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
 .diff-up{color:#ef4444}
 .diff-down{color:#98c26f}
 /* F1 SHARE / BACK LINKS */
-.share-bar{margin-top:1rem;display:flex;justify-content:flex-end}
+.share-bar{margin-top:1rem;display:flex;justify-content:flex-end;gap:.5rem;flex-wrap:wrap}
 .share-link{display:inline-block;padding:.55rem .9rem;border:1px solid var(--border2);background:rgba(15,15,15,.85);color:var(--gold);text-decoration:none;font-family:'DM Mono',monospace;font-size:.7rem;letter-spacing:.1em;text-transform:uppercase}
 .share-link:hover{border-color:var(--gold);background:rgba(201,168,76,.08)}
+.share-btn-x,.share-btn-ig{display:inline-block;padding:.55rem .85rem;border:1px solid var(--border2);background:rgba(15,15,15,.85);color:var(--gold);font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
+.share-btn-x:hover,.share-btn-ig:hover{border-color:var(--gold);background:rgba(201,168,76,.08)}
 .back-link{display:inline-block;margin:1rem 0;color:var(--muted);font-family:'DM Mono',monospace;font-size:.72rem;letter-spacing:.1em;text-decoration:none;text-transform:uppercase}
 .back-link:hover{color:var(--gold)}
 .run-prompt-display{font-size:.85rem;color:#cfc9bc;font-style:italic;margin:1rem 0;padding:.85rem 1.1rem;border-left:3px solid var(--gold);background:rgba(15,15,15,.85)}
@@ -503,6 +506,13 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
 .auth-oauth-btn.google{border-left:3px solid #4285f4}
 .auth-oauth-btn.facebook{border-left:3px solid #1877f2}
 .auth-oauth-btn.instagram{border-left:3px solid #e4405f}
+.provider-status-bar{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;justify-content:center;margin:.5rem 0 0;padding:.4rem .6rem;border:1px solid var(--border2);background:rgba(8,8,8,.6);backdrop-filter:blur(6px);border-radius:4px;font-size:.62rem;color:var(--muted);font-family:'DM Mono',monospace;letter-spacing:.04em}
+.provider-status-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:.25rem}
+.provider-status-dot.ok{background:#22c55e}
+.provider-status-dot.warn{background:#eab308}
+.provider-status-dot.err{background:#ef4444}
+.provider-status-item{display:flex;align-items:center;gap:.15rem;cursor:default}
+.provider-status-label:hover{color:var(--text)}
 </style>
 </head>
 <body>
@@ -514,7 +524,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
 <div class="wrap">
 
   <div class="user-menu" id="userMenu" style="display:none">
-    <button class="user-menu-toggle" id="userMenuToggle" onclick="toggleUserMenu()">
+    <button class="user-menu-toggle" id="userMenuToggle">
       <span id="userMenuName">user</span> ▼
     </button>
     <div class="user-menu-dropdown" id="userMenuDropdown">
@@ -548,6 +558,9 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
 
   <!-- MODES -->
   <div class="modes" id="modes"></div>
+
+  <!-- PROVIDER HEALTH -->
+  <div class="provider-status-bar" id="providerStatusBar"></div>
 
   <!-- RANDOM PROMPTS INLINE STRIP -->
   <div class="random-strip" id="randomStrip">
@@ -586,7 +599,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
       <button class="btn-random" onclick="randomPrompt()">🎲 RANDOM</button>
     </div>
     <div class="input-box">
-      <textarea class="prompt-ta" id="promptInput" placeholder="type something cursed..." maxlength="1500" rows="3" oninput="handleTyping()" onkeydown="_userIsTyping=true" onfocus="_userIsTyping=false"></textarea>
+      <textarea class="prompt-ta" id="promptInput" placeholder="type something cursed..." maxlength="1500" rows="3"></textarea>
       <div class="input-footer"><span class="char-c" id="charCount">0/1500</span></div>
     </div>
     <div class="error-banner" id="errorBanner"></div>
@@ -804,11 +817,11 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
   <div class="runs" id="runsPanel" style="display:none">
     <div class="sec-head"><span class="sh-line"></span><span class="sh-label">// recent runs &mdash; receipts included</span><span class="sh-line"></span></div>
     <div class="runs-toolbar">
-      <input class="runs-search" id="runsSearch" type="search" placeholder="filter by prompt..." oninput="handleRunFilter()">
-      <select class="runs-select" id="runsCrownFilter" onchange="handleRunFilter()">
+      <input class="runs-search" id="runsSearch" type="search" placeholder="filter by prompt...">
+      <select class="runs-select" id="runsCrownFilter">
         <option value="">all winners</option>
       </select>
-      <select class="runs-select" id="runsStatusFilter" onchange="handleRunFilter()">
+      <select class="runs-select" id="runsStatusFilter">
         <option value="">all statuses</option>
         <option value="success">success</option>
         <option value="partial_failure">partial failure</option>
@@ -821,17 +834,17 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
     </div>
     <div class="savedviews" id="savedViewsBar"></div>
     <div class="runs-subfilters">
-      <select class="runs-select" id="runsFailModelFilter" onchange="handleRunFilter()">
+      <select class="runs-select" id="runsFailModelFilter">
         <option value="">all failed models</option>
       </select>
-      <select class="runs-select" id="runsContestantProviderFilter" onchange="handleRunFilter()">
+      <select class="runs-select" id="runsContestantProviderFilter">
         <option value="">all contestant providers</option>
       </select>
-      <select class="runs-select" id="runsJudgeProviderFilter" onchange="handleRunFilter()">
+      <select class="runs-select" id="runsJudgeProviderFilter">
         <option value="">all judge providers</option>
       </select>
-      <input class="runs-date" id="runsDateFrom" type="date" onchange="handleRunFilter()">
-      <input class="runs-date" id="runsDateTo" type="date" onchange="handleRunFilter()">
+      <input class="runs-date" id="runsDateFrom" type="date">
+      <input class="runs-date" id="runsDateTo" type="date">
     </div>
     <div class="failurebar">
       <div class="failcard">
@@ -940,11 +953,11 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
         <button class="auth-btn" id="regBtn" onclick="handleRegister()">Create Account</button>
         <div class="auth-oauth" id="authOAuthRegister" style="display:none">
           <div class="auth-oauth-sep"><span>or</span></div>
-          <button class="auth-oauth-btn google" data-provider="google" onclick="startOAuth('google')">Sign in with Google</button>
-          <button class="auth-oauth-btn facebook" data-provider="facebook" onclick="startOAuth('facebook')">Sign in with Facebook</button>
-          <button class="auth-oauth-btn instagram" data-provider="instagram" onclick="startOAuth('instagram')">Sign in with Instagram</button>
+          <button class="auth-oauth-btn google" data-provider="google">Sign in with Google</button>
+          <button class="auth-oauth-btn facebook" data-provider="facebook">Sign in with Facebook</button>
+          <button class="auth-oauth-btn instagram" data-provider="instagram">Sign in with Instagram</button>
         </div>
-        <div class="auth-switch">Already have an account? <a onclick="showAuthLogin()">Log in</a></div>
+        <div class="auth-switch">Already have an account? <a href="#" data-action="showAuthLogin">Log in</a></div>
       </div>
 
       <!-- Email OTP view -->
@@ -952,16 +965,16 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
         <div class="auth-title">Verify Email</div>
         <div class="auth-subtitle">Enter the 6-digit code sent to <span id="emailOtpTarget"></span></div>
         <div class="auth-otp">
-          <input type="text" id="emailOtp1" maxlength="1" inputmode="numeric" oninput="otpAutoAdvance(this,'emailOtp2')">
-          <input type="text" id="emailOtp2" maxlength="1" inputmode="numeric" oninput="otpAutoAdvance(this,'emailOtp3')">
-          <input type="text" id="emailOtp3" maxlength="1" inputmode="numeric" oninput="otpAutoAdvance(this,'emailOtp4')">
-          <input type="text" id="emailOtp4" maxlength="1" inputmode="numeric" oninput="otpAutoAdvance(this,'emailOtp5')">
-          <input type="text" id="emailOtp5" maxlength="1" inputmode="numeric" oninput="otpAutoAdvance(this,'emailOtp6')">
-          <input type="text" id="emailOtp6" maxlength="1" inputmode="numeric" oninput="otpFinish('email')">
+          <input type="text" id="emailOtp1" maxlength="1" inputmode="numeric" data-otp-next="emailOtp2">
+          <input type="text" id="emailOtp2" maxlength="1" inputmode="numeric" data-otp-next="emailOtp3">
+          <input type="text" id="emailOtp3" maxlength="1" inputmode="numeric" data-otp-next="emailOtp4">
+          <input type="text" id="emailOtp4" maxlength="1" inputmode="numeric" data-otp-next="emailOtp5">
+          <input type="text" id="emailOtp5" maxlength="1" inputmode="numeric" data-otp-next="emailOtp6">
+          <input type="text" id="emailOtp6" maxlength="1" inputmode="numeric" data-otp-finish="email">
         </div>
         <div class="auth-error" id="emailOtpError"></div>
         <button class="auth-btn" id="emailOtpBtn" onclick="handleVerifyEmailOtp()">Verify</button>
-        <div class="auth-switch">Didn't receive it? <a onclick="handleResendEmailOtp()">Resend code</a></div>
+        <div class="auth-switch">Didn't receive it? <a id="resendEmailOtpLink" href="#">Resend code</a></div>
       </div>
 
       <!-- Login view -->
@@ -982,14 +995,14 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
         <button class="auth-btn" id="loginBtn" onclick="handleLogin()">Log In</button>
         <div class="auth-oauth" id="authOAuthLogin" style="display:none">
           <div class="auth-oauth-sep"><span>or</span></div>
-          <button class="auth-oauth-btn google" data-provider="google" onclick="startOAuth('google')">Sign in with Google</button>
-          <button class="auth-oauth-btn facebook" data-provider="facebook" onclick="startOAuth('facebook')">Sign in with Facebook</button>
-          <button class="auth-oauth-btn instagram" data-provider="instagram" onclick="startOAuth('instagram')">Sign in with Instagram</button>
+          <button class="auth-oauth-btn google" data-provider="google">Sign in with Google</button>
+          <button class="auth-oauth-btn facebook" data-provider="facebook">Sign in with Facebook</button>
+          <button class="auth-oauth-btn instagram" data-provider="instagram">Sign in with Instagram</button>
         </div>
         <div class="auth-switch">
-          <a onclick="showAuthForgotPassword()">Forgot password?</a>
+          <a href="#" data-action="showAuthForgotPassword">Forgot password?</a>
         </div>
-        <div class="auth-switch">No account? <a onclick="showAuthRegister()">Join the Arena</a></div>
+        <div class="auth-switch">No account? <a href="#" data-action="showAuthRegister">Join the Arena</a></div>
       </div>
 
       <!-- Forgot password view -->
@@ -1002,7 +1015,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
           <div class="auth-error" id="forgotEmailError"></div>
         </div>
         <button class="auth-btn" id="forgotBtn" onclick="handleForgotPassword()">Send Reset Link</button>
-        <div class="auth-switch">Remember your password? <a onclick="showAuthLogin()">Log in</a></div>
+        <div class="auth-switch">Remember your password? <a href="#" data-action="showAuthLogin">Log in</a></div>
       </div>
 
       <!-- Phone OTP view -->
@@ -1010,23 +1023,23 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
         <div class="auth-title">Verify Phone</div>
         <div class="auth-subtitle">Enter the 6-digit code sent to your phone</div>
         <div class="auth-otp">
-          <input type="text" id="phoneOtp1" maxlength="1" inputmode="numeric" oninput="otpAutoAdvance(this,'phoneOtp2')">
-          <input type="text" id="phoneOtp2" maxlength="1" inputmode="numeric" oninput="otpAutoAdvance(this,'phoneOtp3')">
-          <input type="text" id="phoneOtp3" maxlength="1" inputmode="numeric" oninput="otpAutoAdvance(this,'phoneOtp4')">
-          <input type="text" id="phoneOtp4" maxlength="1" inputmode="numeric" oninput="otpAutoAdvance(this,'phoneOtp5')">
-          <input type="text" id="phoneOtp5" maxlength="1" inputmode="numeric" oninput="otpAutoAdvance(this,'phoneOtp6')">
-          <input type="text" id="phoneOtp6" maxlength="1" inputmode="numeric" oninput="otpFinish('phone')">
+          <input type="text" id="phoneOtp1" maxlength="1" inputmode="numeric" data-otp-next="phoneOtp2">
+          <input type="text" id="phoneOtp2" maxlength="1" inputmode="numeric" data-otp-next="phoneOtp3">
+          <input type="text" id="phoneOtp3" maxlength="1" inputmode="numeric" data-otp-next="phoneOtp4">
+          <input type="text" id="phoneOtp4" maxlength="1" inputmode="numeric" data-otp-next="phoneOtp5">
+          <input type="text" id="phoneOtp5" maxlength="1" inputmode="numeric" data-otp-next="phoneOtp6">
+          <input type="text" id="phoneOtp6" maxlength="1" inputmode="numeric" data-otp-finish="phone">
         </div>
         <div class="auth-error" id="phoneOtpError"></div>
         <button class="auth-btn" id="phoneOtpBtn" onclick="handleVerifyPhoneOtp()">Verify</button>
-        <div class="auth-switch">Didn't receive it? <a onclick="handleResendPhoneOtp()">Resend code</a></div>
+        <div class="auth-switch">Didn't receive it? <a id="resendPhoneOtpLink" href="#">Resend code</a></div>
       </div>
 
     </div>
   </div>
 
   <!-- ACCOUNT SETTINGS MODAL -->
-  <div class="settings-overlay" id="accountSettingsOverlay" onclick="if(event.target===this)closeAccountSettings()">
+  <div class="settings-overlay" id="accountSettingsOverlay">
     <div class="settings-card">
       <div class="settings-head">
         <div class="settings-title">Account Settings</div>
@@ -1068,6 +1081,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
     </div>
   </div>
 
-<script type="module" src="js/app.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

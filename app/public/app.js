@@ -187,6 +187,7 @@ var _activePack = "bar";
 var _packPersonas = {};  // { packId: persona }
 var isAnalyticsPage = window.location.pathname === "/analytics";
 var _showAnalyticsOnIndex = false;
+var providerStatus = {};
 
 // Refresh the page token from /api/config — deduplicates concurrent callers so
 // 10 parallel fire calls that all hit a 403 share a single config fetch.
@@ -361,6 +362,16 @@ function _continueInit() {
 
       var tokenHeader = { "X-Page-Token": _pageToken };
       var shouldLoadAnalytics = isAnalyticsPage || _showAnalyticsOnIndex;
+
+      // Fetch provider health independently — used for status dots
+      fetch("/api/health")
+        .then(function(r) { return r.json(); })
+        .catch(function() { return {}; })
+        .then(function(healthData) {
+          providerStatus = healthData.providerStatus || {};
+          renderProviderStatus();
+        });
+
       var requests = [
         fetch("/api/history").then(function(r) { return r.json(); }).catch(function() { return emptyHistoryPayload; }),
         shouldLoadAnalytics ? fetch("/api/runs?limit=10").then(function(r) { return r.json(); }).catch(function() { return emptyRunsPayload; }) : Promise.resolve(emptyRunsPayload),
@@ -1298,7 +1309,7 @@ function loadCommunityPrompts() {
     .catch(function() {});
 }
 
-function renderShareLink(firedPrompt) {
+function renderShareLink(firedPrompt, judgement) {
   var results = document.getElementById("results");
   if (!results) return;
   var existing = document.getElementById("shareLinkWrap");
@@ -1307,19 +1318,193 @@ function renderShareLink(firedPrompt) {
   if (!prompt) return;
   var wrap = document.createElement("div");
   wrap.id = "shareLinkWrap";
-  wrap.style.cssText = "margin:.75rem 0 0;font-size:.7rem";
+  wrap.className = "share-bar";
+
+  // Replay link
   var link = document.createElement("a");
   link.className = "share-link";
   link.href = "/?replay=" + encodeURIComponent(prompt);
   link.textContent = "↗ share this prompt";
   link.target = "_blank";
   wrap.appendChild(link);
+
+  // Social share buttons — only when we have a judged run
+  var runId = judgement && judgement.runId ? judgement.runId : "";
+  var crownId = judgement && judgement.crown ? judgement.crown : "";
+  var crownScore = (judgement && judgement.scores && judgement.scores[crownId] !== undefined) ? judgement.scores[crownId] : 0;
+  var roast = judgement && judgement.roast ? judgement.roast : "";
+  var answer = crownId && responses && responses[crownId] ? responses[crownId] : "";
+
+  if (runId) {
+    var runUrl = window.location.origin + "/run/" + encodeURIComponent(runId);
+
+    // X / Twitter
+    var xBtn = document.createElement("button");
+    xBtn.className = "share-btn-x";
+    xBtn.textContent = "𝕏 Share on X";
+    var tweetText = "CSB run — " + (_activePack || "bar") + " pack\nPrompt: \"" + prompt.slice(0, 120) + (prompt.length > 120 ? "…" : "") + "\"\nCrowned: " + modelName(crownId) + " (" + crownScore + "/100)\n" + runUrl;
+    xBtn.addEventListener("click", function() {
+      window.open("https://twitter.com/intent/tweet?text=" + encodeURIComponent(tweetText), "_blank", "width=600,height=400");
+    });
+    wrap.appendChild(xBtn);
+
+    // Instagram — generates a downloadable card
+    var igBtn = document.createElement("button");
+    igBtn.className = "share-btn-ig";
+    igBtn.textContent = "📸 Download for Instagram";
+    igBtn.addEventListener("click", function() {
+      generateShareCard({ prompt: prompt, crownId: crownId, crownScore: crownScore, answer: answer, roast: roast, pack: _activePack || "bar", runUrl: runUrl });
+    });
+    wrap.appendChild(igBtn);
+  }
+
   var roastBox = document.getElementById("roastBox");
   if (roastBox && roastBox.parentNode) {
     roastBox.parentNode.insertBefore(wrap, roastBox.nextSibling);
   } else {
     results.appendChild(wrap);
   }
+}
+
+// Canvas-based Instagram share card — 1080×1080 brutalist design
+function generateShareCard(data) {
+  var canvas = document.createElement("canvas");
+  canvas.width = 1080;
+  canvas.height = 1080;
+  var ctx = canvas.getContext("2d");
+
+  // Background
+  ctx.fillStyle = "#0a0a0a";
+  ctx.fillRect(0, 0, 1080, 1080);
+
+  // Gold border inset
+  ctx.strokeStyle = "#c9a84c";
+  ctx.lineWidth = 16;
+  ctx.strokeRect(24, 24, 1032, 1032);
+
+  // Helpers
+  function wrapText(text, maxWidth, fontSize, fontWeight) {
+    ctx.font = (fontWeight || "400") + " " + fontSize + "px sans-serif";
+    var words = String(text || "").split(/\s+/);
+    var lines = [];
+    var current = "";
+    for (var i = 0; i < words.length; i++) {
+      var test = current ? current + " " + words[i] : words[i];
+      if (ctx.measureText(test).width < maxWidth) {
+        current = test;
+      } else {
+        if (current) lines.push(current);
+        current = words[i];
+      }
+    }
+    if (current) lines.push(current);
+    return lines;
+  }
+
+  function drawLines(lines, x, y, lineHeight, color, align) {
+    ctx.fillStyle = color || "#fff";
+    ctx.textAlign = align || "left";
+    lines.forEach(function(line, i) {
+      ctx.fillText(line, x, y + i * lineHeight);
+    });
+    return lines.length * lineHeight;
+  }
+
+  var margin = 80;
+  var maxW = 1080 - margin * 2;
+  var cy = 100;
+
+  // Header
+  ctx.font = "700 48px sans-serif";
+  ctx.fillStyle = "#c9a84c";
+  ctx.textAlign = "center";
+  ctx.fillText("🥊 CHAT SHIT BOB", 540, cy);
+  cy += 30;
+
+  // Gold line
+  ctx.strokeStyle = "#c9a84c";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(margin, cy);
+  ctx.lineTo(1080 - margin, cy);
+  ctx.stroke();
+  cy += 40;
+
+  // Pack label
+  ctx.font = "400 24px monospace";
+  ctx.fillStyle = "#888";
+  ctx.textAlign = "left";
+  ctx.fillText("// " + (data.pack || "bar") + " pack", margin, cy);
+  cy += 50;
+
+  // Prompt
+  var promptLines = wrapText('"' + (data.prompt || "").slice(0, 200) + '"', maxW, 32, "700");
+  cy += drawLines(promptLines, margin, cy, 42, "#fff");
+  cy += 30;
+
+  // Winner
+  var winnerName = modelName(data.crownId || "unknown");
+  ctx.font = "700 36px sans-serif";
+  ctx.fillStyle = "#c9a84c";
+  ctx.textAlign = "left";
+  ctx.fillText("👑 " + winnerName + "  —  " + (data.crownScore || 0) + "/100", margin, cy);
+  cy += 50;
+
+  // Answer
+  var ansLines = wrapText((data.answer || "").slice(0, 280), maxW, 28, "400");
+  cy += drawLines(ansLines, margin, cy, 38, "#d4d4d4");
+  cy += 30;
+
+  // Roast
+  if (data.roast && cy < 940) {
+    var roastLines = wrapText("Bob says: " + data.roast.slice(0, 160), maxW, 24, "400");
+    cy += drawLines(roastLines, margin, cy, 34, "#c9a84c");
+    cy += 20;
+  }
+
+  // Bottom URL
+  ctx.font = "400 20px monospace";
+  ctx.fillStyle = "#666";
+  ctx.textAlign = "center";
+  ctx.fillText(data.runUrl || "chatshitbob.app", 540, 1020);
+
+  // Download
+  canvas.toBlob(function(blob) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "csb-share-" + (data.crownId || "run") + ".png";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, "image/png");
+}
+
+function renderProviderStatus() {
+  var bar = document.getElementById("providerStatusBar");
+  if (!bar) return;
+  bar.textContent = "";
+  if (!MODELS.length) return;
+  var statusMap = providerStatus || {};
+  MODELS.forEach(function(m) {
+    var item = document.createElement("span");
+    item.className = "provider-status-item";
+    item.title = "Provider status: " + (statusMap[m.provider] || "unknown");
+    var dot = document.createElement("span");
+    dot.className = "provider-status-dot";
+    var s = String(statusMap[m.provider] || "").toLowerCase();
+    if (s === "ok") dot.classList.add("ok");
+    else if (s === "degraded" || s === "slow") dot.classList.add("warn");
+    else if (s === "error" || s === "down") dot.classList.add("err");
+    else dot.classList.add("warn");
+    item.appendChild(dot);
+    var label = document.createElement("span");
+    label.className = "provider-status-label";
+    label.textContent = m.provider;
+    item.appendChild(label);
+    bar.appendChild(item);
+  });
 }
 
 function renderReplayDiff(baseScores, newScores) {
@@ -1537,7 +1722,7 @@ async function fire() {
   }
 
   // F1 — share link inside results, idempotent
-  renderShareLink(prompt);
+  renderShareLink(prompt, judgement);
 
   // F4 — replay diff if a baseline was stashed
   if (window._replayBaseScores && judgement && judgement.scores) {
