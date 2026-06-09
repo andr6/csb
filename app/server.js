@@ -24,7 +24,9 @@ function startServer() {
     if (!ALLOWED_ORIGINS.length && process.env.NODE_ENV === "production") {
     console.warn("  [security] ALLOWED_ORIGINS is not set. Mutating endpoints will accept requests from any origin. Set ALLOWED_ORIGINS for production safety.");
   }
+  const { isWasm } = require("./lib/sqlite");
   console.log("\n  CSB running on http://localhost:" + PORT);
+    console.log("  SQLite driver       : " + (isWasm() ? "wasm (node-sqlite3-wasm)" : "native (better-sqlite3)"));
     console.log("  Contestant provider : " + CONTESTANT_PROVIDER);
     Object.keys(MODEL_MAP).forEach(function(id) {
       console.log("    " + id + " -> " + MODEL_MAP[id]);

@@ -4,8 +4,7 @@ const { buildFailureRun, categorizeError } = require("../lib/fireHelpers");
 function createChallengeRouter(deps) {
   const router = express.Router();
 
-  const authMw = deps.authMiddleware;
-  const requireAdminAccess = deps.requireAdminAccess;
+  const requireAdminAuth = deps.requireAdminAuth;
 
   const {
     CONTESTANT_PROVIDER: _CONTESTANT_PROVIDER,
@@ -52,7 +51,7 @@ function createChallengeRouter(deps) {
     judgeModel: JUDGE_MODEL,
   };
 
-  router.post("/api/challenge", authMw.requireAuth, requireAdminAccess, async function(req, res) {
+  router.post("/api/challenge", requireAdminAuth, async function(req, res) {
     const prompt = DAILY_CHALLENGE_PROMPT || (req.body && req.body.prompt) || "";
     if (!prompt) return res.status(400).json({ error: "No challenge prompt. Set DAILY_CHALLENGE_PROMPT in .env or pass prompt in body." });
     const err = validatePrompt(prompt);

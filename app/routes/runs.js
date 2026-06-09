@@ -4,15 +4,14 @@ const { buildRunFilters, toRunsCsv } = require("../lib/fireHelpers");
 function createRunsRouter(deps) {
   const router = express.Router();
 
-  const authMw = deps.authMiddleware;
-  const requireAdminAccess = deps.requireAdminAccess;
+  const requireAdminAuth = deps.requireAdminAuth;
   const publicLimiter = deps.publicLimiter;
 
   const listAnalysisRuns = deps.listAnalysisRuns || require("../lib/analysisRuns").listAnalysisRuns;
   const countAnalysisRuns = deps.countAnalysisRuns || require("../lib/analysisRuns").countAnalysisRuns;
   const getAnalysisRun = deps.getAnalysisRun || require("../lib/analysisRuns").getAnalysisRun;
 
-  router.get("/api/runs", authMw.requireAuth, requireAdminAccess, function(req, res) {
+  router.get("/api/runs", requireAdminAuth, function(req, res) {
     const filters = buildRunFilters(req.query);
     res.json({
       items: listAnalysisRuns(filters),
@@ -20,7 +19,7 @@ function createRunsRouter(deps) {
     });
   });
 
-  router.get("/api/runs/export", authMw.requireAuth, requireAdminAccess, function(req, res) {
+  router.get("/api/runs/export", requireAdminAuth, function(req, res) {
     const filters = buildRunFilters(req.query);
     const format = String(req.query.format || "json").toLowerCase();
     const items = listAnalysisRuns({
@@ -38,7 +37,7 @@ function createRunsRouter(deps) {
     res.send(JSON.stringify({ items: items, total: items.length, exportedAt: new Date().toISOString() }, null, 2));
   });
 
-  router.get("/api/runs/:id", authMw.requireAuth, requireAdminAccess, function(req, res) {
+  router.get("/api/runs/:id", requireAdminAuth, function(req, res) {
     const item = getAnalysisRun(req.params.id);
     if (!item) {
       return res.status(404).json({ error: "Run not found." });

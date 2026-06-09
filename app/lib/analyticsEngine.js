@@ -455,6 +455,7 @@ function computeWinStreaks(rows) {
 }
 
 function computeBlindAlignment(rows) {
+  const MIN_VOTES_FOR_SIGNIFICANCE = 30;
   let aligned = 0;
   let total = 0;
   rows.forEach(function(run) {
@@ -467,7 +468,25 @@ function computeBlindAlignment(rows) {
       if (userVotes[voterId] === crown) aligned += 1;
     });
   });
-  return { totalVotes: total, alignedVotes: aligned, alignmentPct: total ? Math.round((aligned / total) * 100) : 0 };
+  if (total < MIN_VOTES_FOR_SIGNIFICANCE) {
+    return { totalVotes: total, alignedVotes: aligned, alignmentPct: null, note: "Insufficient data for statistical significance (need 30+ votes)." };
+  }
+  // Wilson score interval for 95% confidence
+  const p = aligned / total;
+  const z = 1.96;
+  const denominator = 1 + (z * z) / total;
+  const centre = (p + (z * z) / (2 * total)) / denominator;
+  const width = z * Math.sqrt((p * (1 - p) + (z * z) / (4 * total)) / total) / denominator;
+  return {
+    totalVotes: total,
+    alignedVotes: aligned,
+    alignmentPct: Math.round(p * 100),
+    confidence: {
+      level: 0.95,
+      lower: Math.round(Math.max(0, centre - width) * 100),
+      upper: Math.round(Math.min(1, centre + width) * 100),
+    },
+  };
 }
 
 function computePromptTopics(rows) {

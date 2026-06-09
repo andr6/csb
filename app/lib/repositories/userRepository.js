@@ -75,14 +75,6 @@ function createUserRepository() {
     );
   }
 
-  function enableCustomMode(id) {
-    const now = new Date().toISOString();
-    runSqlParams(
-      "UPDATE users SET custom_mode_access_enabled = 1, updated_at = ? WHERE id = ?",
-      [now, id]
-    );
-  }
-
   function updateName(id, fullName) {
     const now = new Date().toISOString();
     runSqlParams(
@@ -110,7 +102,7 @@ function createUserRepository() {
   function markPhoneUnverified(id) {
     const now = new Date().toISOString();
     runSqlParams(
-      "UPDATE users SET phone_verified = 0, custom_mode_access_enabled = 0, updated_at = ? WHERE id = ?",
+      "UPDATE users SET phone_verified = 0, updated_at = ? WHERE id = ?",
       [now, id]
     );
   }
@@ -152,7 +144,6 @@ function createUserRepository() {
     lockAccount,
     isAccountLocked,
     updateFirstLogin,
-    enableCustomMode,
     updateName,
     updatePasswordHash,
     markEmailUnverified,

@@ -8,7 +8,6 @@ const {
   JUDGE_PROVIDER,
   JUDGE_MODEL,
   MODEL_MAP,
-  ANALYTICS_PAGE_PASSWORD,
   ALLOWED_ORIGINS,
   MAIL_HOST,
   MAIL_PORT,
@@ -35,9 +34,11 @@ const { createSessionRepository } = require("./lib/repositories/sessionRepositor
 const { createPasswordResetRepository } = require("./lib/repositories/passwordResetRepository");
 const authService = require("./lib/authService");
 const { createAuthMiddleware } = require("./lib/middleware/authMiddleware");
-const { createRequireAdminAccess } = require("./lib/middleware/requireAdminAccess");
+const { createRequireAdminAccess } = require("./lib/middleware/requireAdminAuth");
 const { createLeaderboardService } = require("./lib/leaderboard");
 const { createRateLimiters, tryCreateStore } = require("./lib/rateLimiters");
+const { runBackup } = require("./lib/backup");
+const logger = require("./lib/logger");
 const nodemailer = require("nodemailer");
 
 const { createAuthRouter } = require("./routes/auth");
@@ -53,7 +54,7 @@ const { createConfigRouter } = require("./routes/config");
 const { createRunRouter } = require("./routes/run");
 
 // ── Daily call circuit breaker (SQLite-backed, survives restarts) ─────────────
-const { dailyLimitExceeded, dailyIncrement } = require("./lib/dailyLimits");
+const { dailyTryIncrement } = require("./lib/dailyLimits");
 
 // ── Page token ─ gates /api/fire and /api/judge to visitors who loaded the page ──
 const PAGE_TOKEN_SECRET = process.env.PAGE_TOKEN_SECRET || crypto.randomBytes(32).toString("hex");
@@ -111,9 +112,6 @@ function createApp(overrides) {
   const getAnalysisRun = deps.getAnalysisRun || analysisRunServices.getAnalysisRun;
   const metrics = deps.metrics || metricsServices.defaultStore;
   const notifyWebhookFn = deps.notifyWebhook || notifyWebhook;
-  const analyticsPagePassword = deps.analyticsPagePassword !== undefined
-    ? String(deps.analyticsPagePassword || "")
-    : ANALYTICS_PAGE_PASSWORD;
 
   // Auth wiring
   const userRepo = deps.userRepository || createUserRepository();
@@ -121,8 +119,13 @@ function createApp(overrides) {
   const sessionRepo = deps.sessionRepository || createSessionRepository();
   const resetRepo = deps.passwordResetRepository || createPasswordResetRepository();
   const authMw = deps.authMiddleware || (process.env.NODE_ENV === "test"
-    ? { requireAuth: function(req, res, next) { next(); }, requirePhoneVerified: function(req, res, next) { next(); }, requireCustomModeAccess: function(req, res, next) { next(); } }
+    ? { requireAuth: function(req, res, next) { next(); }, requirePhoneVerified: function(req, res, next) { next(); } }
     : createAuthMiddleware({ userRepository: userRepo, sessionRepository: sessionRepo }));
+
+  // Deprecation warning: ANALYTICS_PAGE_PASSWORD is no longer used
+  if (process.env.ANALYTICS_PAGE_PASSWORD) {
+    console.warn("[deprecated] ANALYTICS_PAGE_PASSWORD is no longer used. Analytics requires admin login.");
+  }
 
   // Admin user seed — one-time setup with signed URL (no raw password in stdout)
   async function seedAdminUser() {
@@ -150,7 +153,7 @@ function createApp(overrides) {
     if (!userId) { console.error("[auth] Failed to seed admin user"); return; }
     const now = new Date().toISOString();
     runSqlParams(
-      "UPDATE users SET email_verified = 1, phone_verified = 1, first_login_completed = 1, custom_mode_access_enabled = 1, updated_at = ? WHERE id = ?",
+      "UPDATE users SET email_verified = 1, phone_verified = 1, first_login_completed = 1, updated_at = ? WHERE id = ?",
       [now, userId]
     );
 
@@ -211,12 +214,12 @@ function createApp(overrides) {
     res.sendFile(path.join(__dirname, "public", "index.html"));
   }
 
-  // Analytics auth middleware
-  const requireAdminAccess = createRequireAdminAccess({
+  // Admin auth middleware — Bearer token admin sessions only.
+  // ⚠️ NEVER chain this with authMw.requireAuth on the same route.
+  const requireAdminAuth = createRequireAdminAccess({
     sessionRepository: sessionRepo,
     userRepository: userRepo,
     adminEmail: ADMIN_EMAIL,
-    analyticsPagePassword: analyticsPagePassword,
   });
 
   // Rate limiters
@@ -243,6 +246,22 @@ function createApp(overrides) {
   app.use(function(req, res, next) {
     req.requestId = crypto.randomUUID();
     res.setHeader("X-Request-ID", req.requestId);
+    next();
+  });
+
+  // Structured request logging
+  app.use(function(req, res, next) {
+    var start = Date.now();
+    res.on("finish", function() {
+      logger.info(req.method + " " + req.path, {
+        requestId: req.requestId,
+        method: req.method,
+        path: req.path,
+        status: res.statusCode,
+        durationMs: Date.now() - start,
+        ip: req.ip,
+      });
+    });
     next();
   });
 
@@ -277,7 +296,13 @@ function createApp(overrides) {
   });
   app.use(cors(buildCorsOptions()));
   app.get("/", sendIndex);
-  app.get("/analytics", authFailLimiter, requireAdminAccess, sendIndex);
+  app.get("/analytics", authFailLimiter, requireAdminAuth, sendIndex);
+  app.use(function(req, res, next) {
+    if (/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|eot)$/.test(req.path)) {
+      res.setHeader("Cache-Control", "public, max-age=86400");
+    }
+    next();
+  });
   app.use(express.static(path.join(__dirname, "public")));
 
   // Route modules
@@ -315,14 +340,13 @@ function createApp(overrides) {
     publicLimiter,
     fireLimiter,
     requireKnownOrigin,
-    dailyLimitExceeded,
-    dailyIncrement,
+    dailyTryIncrement,
   }));
 
   app.use(createRunsRouter({
     ...deps,
     authMiddleware: authMw,
-    requireAdminAccess,
+    requireAdminAuth,
     publicLimiter,
   }));
 
@@ -331,21 +355,20 @@ function createApp(overrides) {
     authMiddleware: authMw,
     judgeLimiter,
     requireKnownOrigin,
-    dailyLimitExceeded,
-    dailyIncrement,
+    dailyTryIncrement,
     invalidateAnalyticsCaches,
   }));
 
   app.use(createChallengeRouter({
     ...deps,
     authMiddleware: authMw,
-    requireAdminAccess,
+    requireAdminAuth,
   }));
 
   app.use(createAnalyticsRouter({
     ...deps,
     authMiddleware: authMw,
-    requireAdminAccess,
+    requireAdminAuth,
     _analyticsCache,
     _failuresCache,
   }));
@@ -353,7 +376,7 @@ function createApp(overrides) {
   app.use(createPromptsRouter({
     ...deps,
     authMiddleware: authMw,
-    requireAdminAccess,
+    requireAdminAuth,
     publicLimiter,
     tryCreateStore,
   }));
@@ -367,7 +390,7 @@ function createApp(overrides) {
   app.use(createHealthRouter({
     ...deps,
     authMiddleware: authMw,
-    requireAdminAccess,
+    requireAdminAuth,
     checkProviderHealth: deps.checkProviderHealth || providerServices.checkProviderHealth,
   }));
 
@@ -380,6 +403,10 @@ function createApp(overrides) {
   app.get("*", function(req, res) {
     res.sendFile(path.join(__dirname, "public", "index.html"));
   });
+
+  // Daily SQLite backup — run once on startup, then every 24 hours
+  runBackup();
+  setInterval(runBackup, 24 * 60 * 60 * 1000);
 
   return app;
 }

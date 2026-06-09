@@ -34,75 +34,32 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
 /* HEADER */
 .header{padding:3rem 0 2.5rem;display:flex;flex-direction:column;align-items:center;text-align:center;border-bottom:1px solid var(--border)}
 
-/* Eyebrow — big red impact */
-.eyebrow{
-  font-family:'Oswald',sans-serif;
-  font-size:clamp(1.1rem,2.8vw,1.6rem);
-  font-weight:600;letter-spacing:.25em;
-  color:var(--shit);text-transform:uppercase;
-  margin-bottom:2rem;
-}
-.eyebrow::before,.eyebrow::after{
-  content:'';display:inline-block;
-  width:clamp(24px,5vw,60px);height:2px;
-  background:var(--shit);vertical-align:middle;
-  margin:0 1.2rem;opacity:.5;
-}
-
 /* Logo block — glove centered above CSB */
 .logo-block{display:flex;flex-direction:column;align-items:center;gap:.5rem}
 .logo-glove{
-  width:clamp(100px,16vw,180px);
-  height:clamp(100px,16vw,180px);
+  width:clamp(80px,12vw,140px);
+  height:clamp(80px,12vw,140px);
   object-fit:contain;
-  filter:drop-shadow(0 0 24px rgba(201,168,76,.6)) drop-shadow(0 0 50px rgba(201,168,76,.25));
-  animation:glove-float 4s ease-in-out infinite;
+  filter:drop-shadow(0 0 16px rgba(201,168,76,.4));
 }
-@keyframes glove-float{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-10px) rotate(2deg)}}
-.logo{font-family:'Anton',sans-serif;font-size:clamp(5rem,16vw,12rem);line-height:.85;color:var(--gold);letter-spacing:-.02em}
-.logo.glitch{animation:glitch .18s steps(3) forwards}
-@keyframes glitch{
-  0%{text-shadow:3px 0 var(--shit),-3px 0 #4285f4;clip-path:inset(10% 0 80% 0)}
-  33%{text-shadow:-3px 0 var(--shit),3px 0 #4285f4;clip-path:inset(60% 0 20% 0);transform:translate(-2px)}
-  66%{text-shadow:2px 0 var(--shit),-2px 0 #4285f4;clip-path:inset(30% 0 50% 0);transform:translate(2px)}
-  100%{text-shadow:none;clip-path:none;transform:none}
-}
-/* Chat Shit Bob text below CSB */
+.logo{font-family:'Anton',sans-serif;font-size:clamp(4rem,14vw,10rem);line-height:.85;color:var(--gold);letter-spacing:-.02em}
 .logo-full{
   font-family:'Oswald',sans-serif;font-weight:300;
-  font-size:clamp(1rem,3vw,1.8rem);
-  letter-spacing:.5em;color:var(--muted);
+  font-size:clamp(.9rem,2.5vw,1.4rem);
+  letter-spacing:.35em;color:var(--muted);
   text-transform:uppercase;margin-top:.25rem;
 }
-
-/* Bob — big */
-.bob-wrap{
-  margin-top:2.5rem;
-  width:220px;height:220px;
-  border-radius:50%;overflow:hidden;
-  border:3px solid var(--gold);
-  box-shadow:0 0 40px rgba(201,168,76,.4),0 0 80px rgba(201,168,76,.15),0 0 0 10px rgba(201,168,76,.06);
-}
-.bob-wrap img{width:100%;height:100%;object-fit:cover;object-position:center top;filter:saturate(.8) contrast(1.15) brightness(.92)}
-
-/* Bob label — big gold impact */
-.bob-label{
-  font-family:'Anton',sans-serif;
-  font-size:clamp(1.4rem,3.5vw,2.2rem);
-  letter-spacing:.2em;color:var(--gold);
-  text-transform:uppercase;margin-top:1.25rem;
-  text-shadow:0 0 25px rgba(201,168,76,.45);
-}
-
-/* Tagline — big white statement */
 .header-sub{
   font-family:'Oswald',sans-serif;
-  font-size:clamp(.8rem,1.8vw,1.3rem);
+  font-size:clamp(.85rem,1.6vw,1.15rem);
   font-weight:400;color:var(--text);
-  margin-top:1.25rem;letter-spacing:.04em;
-  line-height:1.2;white-space:nowrap;opacity:.88;
+  margin-top:1rem;letter-spacing:.02em;
+  line-height:1.4;opacity:.85;
+  max-width:520px;
 }
 .header-actions{margin-top:1rem;display:flex;justify-content:center;gap:.75rem;flex-wrap:wrap}
+.bob-wrap{margin-top:.75rem}
+.bob-img{width:clamp(60px,9vw,100px);height:clamp(60px,9vw,100px);object-fit:cover;border-radius:50%;border:2px solid var(--gold);filter:drop-shadow(0 0 12px rgba(201,168,76,.3))}
 .header-link{display:inline-flex;align-items:center;justify-content:center;min-width:12rem;padding:.8rem 1rem;border:1px solid var(--border2);background:rgba(15,15,15,.78);color:var(--text);text-decoration:none;text-transform:uppercase;letter-spacing:.14em;font-size:.68rem;transition:all .15s}
 .header-link:hover{border-color:var(--gold);color:var(--gold);background:rgba(201,168,76,.08)}
 .header-link--active{border-color:var(--gold);color:var(--gold)}
@@ -147,6 +104,9 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
 .mode-emoji svg{display:block;width:100%;height:100%}
 .mode-emoji svg *{vector-effect:non-scaling-stroke}
 .mode-desc{display:block;font-size:.58rem;opacity:.7;margin-top:.15rem}
+.mode-info{margin:.75rem 0 0;padding:.6rem 1rem;border-left:3px solid var(--gold);background:rgba(212,175,55,.06);font-family:'DM Mono',monospace;font-size:.75rem;color:var(--text);line-height:1.6;display:none}
+.mode-info.visible{display:block}
+.mode-info strong{color:var(--gold);font-weight:700}
 
 /* RANDOM PROMPTS STRIP */
 .random-strip{
@@ -408,12 +368,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
 .mod-empty{font-size:.72rem;color:#555;padding:1.5rem;text-align:center;border:1px dashed var(--border)}
 .mod-error{font-size:.72rem;color:#ef4444;padding:.75rem;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.05)}
 
-/* PING */
-.ping{margin-top:4rem;text-align:center;padding:3rem;border:1px dashed #1e1e1e;position:relative;background:rgba(8,8,8,.6);backdrop-filter:blur(8px)}
-.ping-glove{position:absolute;top:-1.5rem;left:50%;transform:translateX(-50%);width:50px;height:50px;object-fit:contain;filter:drop-shadow(0 0 10px rgba(201,168,76,.5))}
-.ping p{font-family:'Anton',sans-serif;font-size:clamp(1.5rem,5vw,2.5rem);color:#222;letter-spacing:.2em}
-.ping p b{color:var(--gold)}
-
 /* FOOTER */
 .footer{text-align:center;padding:3rem 0 1rem;font-size:.65rem;color:#333;letter-spacing:.2em;text-transform:uppercase;font-family:'DM Mono',monospace}
 
@@ -432,9 +386,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
   .modes{flex-direction:column}
   .mode-btn{border-right:none;border-bottom:1px solid var(--border)}
   .mode-btn:last-child{border-bottom:none}
-  .bob-wrap{width:160px;height:160px}
   .random-strip{gap:.4rem}
-  .header-sub{white-space:normal;font-size:.85rem}
 }
 
 /* F2 VERSUS */
@@ -505,7 +457,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
 .auth-oauth-btn:hover{border-color:var(--gold);color:var(--gold)}
 .auth-oauth-btn.google{border-left:3px solid #4285f4}
 .auth-oauth-btn.facebook{border-left:3px solid #1877f2}
-.auth-oauth-btn.instagram{border-left:3px solid #e4405f}
 .provider-status-bar{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;justify-content:center;margin:.5rem 0 0;padding:.4rem .6rem;border:1px solid var(--border2);background:rgba(8,8,8,.6);backdrop-filter:blur(6px);border-radius:4px;font-size:.62rem;color:var(--muted);font-family:'DM Mono',monospace;letter-spacing:.04em}
 .provider-status-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:.25rem}
 .provider-status-dot.ok{background:#22c55e}
@@ -528,43 +479,34 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
       <span id="userMenuName">user</span> ▼
     </button>
     <div class="user-menu-dropdown" id="userMenuDropdown">
-      <button class="user-menu-item" onclick="openAccountSettings()">Account Settings</button>
+      <button class="user-menu-item" >Account Settings</button>
       <div class="user-menu-sep"></div>
-      <button class="user-menu-item" onclick="logout()">Log Out</button>
+      <button class="user-menu-item" >Log Out</button>
     </div>
   </div>
 
   <header class="header">
-    <p class="eyebrow">// the ai benchmarking show nobody asked for</p>
-
-    <!-- Glove centered above CSB, Chat Shit Bob below -->
     <div class="logo-block">
       <img src="assets/glove.jpg" class="logo-glove" alt="CSB" onerror="this.style.display='none'">
       <div class="logo" id="logo">CSB</div>
-      <div class="logo-full">Chat &middot; Shit &middot; Bob</div>
+      <div class="logo-full">Chat Shit Bob</div>
+      <div class="bob-wrap">
+        <img src="assets/bob.jpg" class="bob-img" alt="Bob" onerror="this.style.display='none'">
+      </div>
     </div>
-
-    <!-- Bob big -->
-    <div class="bob-wrap">
-      <img src="assets/bob.jpg" alt="Bob" onerror="this.style.display='none'">
-    </div>
-    <div class="bob-label">— Bob, the judge —</div>
     <p class="header-sub">we rank which LLM gave the sh*ttest answer &mdash; so you don't have to</p>
     <div class="header-actions">
-      <a class="header-link" id="homeLink" href="/">benchmark arena</a>
-      <button class="header-link" id="adminAnalyticsBtn" onclick="toggleAdminAnalytics()" style="display:none">analytics</button>
+      <button class="header-link" id="adminAnalyticsBtn"  style="display:none">analytics</button>
     </div>
   </header>
 
   <!-- MODES -->
   <div class="modes" id="modes"></div>
-
-  <!-- PROVIDER HEALTH -->
-  <div class="provider-status-bar" id="providerStatusBar"></div>
+  <div class="mode-info" id="modeInfo"></div>
 
   <!-- RANDOM PROMPTS INLINE STRIP -->
-  <div class="random-strip" id="randomStrip">
-    <span class="random-strip-label">try:</span>
+  <div class="random-strip" id="randomStrip" style="display:none">
+    <span class="random-strip-label">Try:</span>
   </div>
 
   <!-- F2 VERSUS PICKERS -->
@@ -575,46 +517,46 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
 
   <!-- PACK SELECTOR -->
   <div class="pack-selector-wrap" id="packSelectorWrap">
-    <div class="criteria-picker-label">// character pack</div>
+    <div class="criteria-picker-label" id="packLabel">Character pack</div>
     <div class="pack-selector" id="packSelector"></div>
     <div class="pack-teaser" id="packTeaser"></div>
   </div>
 
   <!-- F9 CUSTOM CRITERIA PICKER -->
   <div class="criteria-picker" id="criteriaPicker" style="display:none">
-    <div class="criteria-picker-label">// judge on these sins only</div>
+    <div class="criteria-picker-label">Judge on these criteria only</div>
     <div class="criteria-grid" id="criteriaGrid"></div>
   </div>
 
   <!-- TOURNAMENT -->
   <div class="criteria-picker" id="tournamentPanel" style="display:none">
-    <div class="criteria-picker-label">// tournament bracket — 16 models, single elimination</div>
+    <div class="criteria-picker-label">Tournament bracket — 16 models, single elimination</div>
     <div id="tournamentBracket" style="margin-top:1rem"></div>
   </div>
 
   <!-- INPUT -->
   <div class="input-sec" id="inputSection">
     <div class="input-row-label">
-      <span class="input-label">// prompt to be mad</span>
-      <button class="btn-random" onclick="randomPrompt()">🎲 RANDOM</button>
+      <span class="input-label">Your prompt</span>
+      <button class="btn-random" >🎲 Random idea</button>
     </div>
     <div class="input-box">
-      <textarea class="prompt-ta" id="promptInput" placeholder="type something cursed..." maxlength="1500" rows="3"></textarea>
-      <div class="input-footer"><span class="char-c" id="charCount">0/1500</span></div>
+      <textarea class="prompt-ta" id="promptInput" placeholder="Ask anything..." maxlength="1500" rows="3"></textarea>
+      <div class="input-footer"><span class="char-c" id="charCount">0 / 1500</span></div>
     </div>
     <div class="error-banner" id="errorBanner"></div>
-    <label class="blind-toggle"><input type="checkbox" id="blindToggle"> 🎭 Blind Taste Test — hide model identities until reveal</label>
-    <button class="btn-fire" id="fireBtn" onclick="fire()" disabled>💩 FIRE AT ALL LLMS</button>
-    <button class="btn-reset" id="resetBtn" style="display:none" onclick="reset()">&#8635; reset &mdash; go again</button>
-    <button class="btn-reveal" id="revealBtn" style="display:none" onclick="revealBlind()">👁 REVEAL MODELS</button>
+    <label class="blind-toggle"><input type="checkbox" id="blindToggle"> Hide model names until after judging</label>
+    <button class="btn-fire" id="fireBtn"  disabled>Run Benchmark</button>
+    <button class="btn-reset" id="resetBtn" style="display:none" >Reset — run again</button>
+    <button class="btn-reveal" id="revealBtn" style="display:none" >Reveal models</button>
   </div>
 
   <!-- RESULTS -->
   <div id="results" style="display:none">
-    <div class="sec-head"><span class="sh-line"></span><span class="sh-label">// results &mdash; bob is watching</span><span class="sh-line"></span></div>
-    <div class="sec-head" style="margin-top:-.75rem"><span class="sh-line"></span><span class="sh-label" id="resultsPersonaHeader" style="color:var(--muted);font-size:.62rem">// each model was given a bar-owner persona &mdash; high score = safety training won</span><span class="sh-line"></span></div>
-    <div class="judging" id="judgingBanner" style="display:none"><div class="spinner"></div><p>Bob is judging all five&hellip; this might sting.</p></div>
-    <div class="roast" id="roastBox" style="display:none"><span class="roast-by">Bob's global verdict:</span><span id="roastText"></span></div>
+    <div class="sec-head"><span class="sh-line"></span><span class="sh-label">Results</span><span class="sh-line"></span></div>
+    <div class="sec-head" style="margin-top:-.75rem"><span class="sh-line"></span><span class="sh-label" id="resultsPersonaHeader" style="color:var(--muted);font-size:.62rem">Low quality = model avoided answering or broke character</span><span class="sh-line"></span></div>
+    <div class="judging" id="judgingBanner" style="display:none"><div class="spinner"></div><p>Scoring responses...</p></div>
+    <div class="roast" id="roastBox" style="display:none"><span class="roast-by">Summary:</span><span id="roastText"></span></div>
     <div class="grid" id="cardsGrid"></div>
   </div>
 
@@ -625,7 +567,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
   </div>
 
   <div class="analytics" id="analyticsPanel" style="display:none">
-    <div class="sec-head"><span class="sh-line"></span><span class="sh-label">// model analytics &mdash; who is winning, failing, and slowing down</span><span class="sh-line"></span></div>
+    <div class="sec-head"><span class="sh-line"></span><span class="sh-label">Model analytics</span><span class="sh-line"></span></div>
     <div class="analytics-grid">
       <div class="analytic-card">
         <div class="analytic-big" id="analyticsRuns">0</div>
@@ -815,7 +757,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
   </div>
 
   <div class="runs" id="runsPanel" style="display:none">
-    <div class="sec-head"><span class="sh-line"></span><span class="sh-label">// recent runs &mdash; receipts included</span><span class="sh-line"></span></div>
+    <div class="sec-head"><span class="sh-line"></span><span class="sh-label">Recent runs</span><span class="sh-line"></span></div>
     <div class="runs-toolbar">
       <input class="runs-search" id="runsSearch" type="search" placeholder="filter by prompt...">
       <select class="runs-select" id="runsCrownFilter">
@@ -828,8 +770,8 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
         <option value="failure">failure</option>
       </select>
       <div class="runs-actions">
-        <button class="runs-export" onclick="exportRuns('json')">export json</button>
-        <button class="runs-export" onclick="exportRuns('csv')">export csv</button>
+        <button class="runs-export" >export json</button>
+        <button class="runs-export" >export csv</button>
       </div>
     </div>
     <div class="savedviews" id="savedViewsBar"></div>
@@ -888,8 +830,8 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
       </div>
     </div>
     <div class="runs-pager">
-      <button class="runs-pagebtn" id="runsPrevBtn" onclick="changeRunsPage(-1)">prev</button>
-      <button class="runs-pagebtn" id="runsNextBtn" onclick="changeRunsPage(1)">next</button>
+      <button class="runs-pagebtn" id="runsPrevBtn" >prev</button>
+      <button class="runs-pagebtn" id="runsNextBtn" >next</button>
       <span class="runs-pageinfo" id="runsPageInfo">page 1</span>
     </div>
     <div class="runs-grid">
@@ -907,12 +849,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
   <!-- F3 MODEL PROFILE VIEW -->
   <div class="model-profile" id="modelProfile" style="display:none"></div>
 
-  <!-- PING -->
-  <div class="ping" id="pingSection">
-    <img src="assets/glove.jpg" class="ping-glove" alt="" onerror="this.style.display='none'">
-    <p>you bored? <b>ping us.</b></p>
-  </div>
-
   <div class="footer">Created by some lads in planet earth &mdash; '26</div>
 </div>
 
@@ -922,8 +858,8 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
 
       <!-- Registration view -->
       <div id="authRegisterView">
-        <div class="auth-title">Join the Arena</div>
-        <div class="auth-subtitle">Create your account to enter Chat Shit Bob</div>
+        <div class="auth-title">Create Account</div>
+        <div class="auth-subtitle">Sign up to save your benchmark history</div>
         <div class="auth-field">
           <label>Name or Alias</label>
           <input type="text" id="regName" placeholder="At least 4 characters" autocomplete="name">
@@ -950,12 +886,11 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
           <input type="password" id="regConfirmPassword" placeholder="Repeat password" autocomplete="new-password">
           <div class="auth-error" id="regConfirmError"></div>
         </div>
-        <button class="auth-btn" id="regBtn" onclick="handleRegister()">Create Account</button>
+        <button class="auth-btn" id="regBtn" >Create Account</button>
         <div class="auth-oauth" id="authOAuthRegister" style="display:none">
           <div class="auth-oauth-sep"><span>or</span></div>
           <button class="auth-oauth-btn google" data-provider="google">Sign in with Google</button>
           <button class="auth-oauth-btn facebook" data-provider="facebook">Sign in with Facebook</button>
-          <button class="auth-oauth-btn instagram" data-provider="instagram">Sign in with Instagram</button>
         </div>
         <div class="auth-switch">Already have an account? <a href="#" data-action="showAuthLogin">Log in</a></div>
       </div>
@@ -973,14 +908,14 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
           <input type="text" id="emailOtp6" maxlength="1" inputmode="numeric" data-otp-finish="email">
         </div>
         <div class="auth-error" id="emailOtpError"></div>
-        <button class="auth-btn" id="emailOtpBtn" onclick="handleVerifyEmailOtp()">Verify</button>
+        <button class="auth-btn" id="emailOtpBtn" >Verify</button>
         <div class="auth-switch">Didn't receive it? <a id="resendEmailOtpLink" href="#">Resend code</a></div>
       </div>
 
       <!-- Login view -->
       <div id="authLoginView" style="display:none">
-        <div class="auth-title">Welcome Back</div>
-        <div class="auth-subtitle">Log in to Chat Shit Bob</div>
+        <div class="auth-title">Log In</div>
+        <div class="auth-subtitle">Access your benchmark history</div>
         <div class="auth-field">
           <label>Email</label>
           <input type="email" id="loginEmail" placeholder="you@example.com" autocomplete="email">
@@ -992,12 +927,11 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
           <div class="auth-error" id="loginPasswordError"></div>
         </div>
         <div class="auth-error" id="loginGeneralError"></div>
-        <button class="auth-btn" id="loginBtn" onclick="handleLogin()">Log In</button>
+        <button class="auth-btn" id="loginBtn" >Log In</button>
         <div class="auth-oauth" id="authOAuthLogin" style="display:none">
           <div class="auth-oauth-sep"><span>or</span></div>
           <button class="auth-oauth-btn google" data-provider="google">Sign in with Google</button>
           <button class="auth-oauth-btn facebook" data-provider="facebook">Sign in with Facebook</button>
-          <button class="auth-oauth-btn instagram" data-provider="instagram">Sign in with Instagram</button>
         </div>
         <div class="auth-switch">
           <a href="#" data-action="showAuthForgotPassword">Forgot password?</a>
@@ -1014,7 +948,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
           <input type="email" id="forgotEmail" placeholder="you@example.com" autocomplete="email">
           <div class="auth-error" id="forgotEmailError"></div>
         </div>
-        <button class="auth-btn" id="forgotBtn" onclick="handleForgotPassword()">Send Reset Link</button>
+        <button class="auth-btn" id="forgotBtn" >Send Reset Link</button>
         <div class="auth-switch">Remember your password? <a href="#" data-action="showAuthLogin">Log in</a></div>
       </div>
 
@@ -1031,7 +965,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
           <input type="text" id="phoneOtp6" maxlength="1" inputmode="numeric" data-otp-finish="phone">
         </div>
         <div class="auth-error" id="phoneOtpError"></div>
-        <button class="auth-btn" id="phoneOtpBtn" onclick="handleVerifyPhoneOtp()">Verify</button>
+        <button class="auth-btn" id="phoneOtpBtn" >Verify</button>
         <div class="auth-switch">Didn't receive it? <a id="resendPhoneOtpLink" href="#">Resend code</a></div>
       </div>
 
@@ -1043,14 +977,14 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
     <div class="settings-card">
       <div class="settings-head">
         <div class="settings-title">Account Settings</div>
-        <button class="settings-close" onclick="closeAccountSettings()">×</button>
+        <button class="settings-close" >×</button>
       </div>
 
       <div class="settings-section">
         <div class="settings-label">Name or Alias</div>
         <input type="text" class="settings-input" id="settingsNameInput" placeholder="At least 4 characters">
         <div class="settings-hint" id="settingsNameHint"></div>
-        <button class="settings-btn" onclick="handleUpdateName()">Update Name</button>
+        <button class="settings-btn" >Update Name</button>
         <div class="settings-msg" id="settingsNameMsg"></div>
       </div>
 
@@ -1058,7 +992,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
         <div class="settings-label">Email</div>
         <input type="email" class="settings-input" id="settingsEmailInput" placeholder="your@email.com">
         <div class="settings-hint" id="settingsEmailHint">Changing email will require re-verification.</div>
-        <button class="settings-btn" onclick="handleUpdateEmail()">Update Email</button>
+        <button class="settings-btn" >Update Email</button>
         <div class="settings-msg" id="settingsEmailMsg"></div>
       </div>
 
@@ -1066,7 +1000,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
         <div class="settings-label">Phone Number</div>
         <input type="tel" class="settings-input" id="settingsPhoneInput" placeholder="+1234567890">
         <div class="settings-hint" id="settingsPhoneHint">Changing phone will require re-verification.</div>
-        <button class="settings-btn" onclick="handleUpdatePhone()">Update Phone</button>
+        <button class="settings-btn" >Update Phone</button>
         <div class="settings-msg" id="settingsPhoneMsg"></div>
       </div>
 
@@ -1075,12 +1009,12 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
         <input type="password" class="settings-input" id="settingsCurrentPassword" placeholder="Current password" style="margin-bottom:.4rem">
         <input type="password" class="settings-input" id="settingsNewPassword" placeholder="New password (8+ chars, upper, lower, number, special)" style="margin-bottom:.4rem">
         <input type="password" class="settings-input" id="settingsConfirmPassword" placeholder="Confirm new password">
-        <button class="settings-btn" onclick="handleChangePassword()">Update Password</button>
+        <button class="settings-btn" >Update Password</button>
         <div class="settings-msg" id="settingsPasswordMsg"></div>
       </div>
     </div>
   </div>
 
-<script src="app.js"></script>
+<script type="module" src="js/app.js"></script>
 </body>
 </html>

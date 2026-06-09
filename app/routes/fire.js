@@ -11,6 +11,7 @@ const {
 
 const modelServices = require("../lib/models");
 const providerServices = require("../lib/providers");
+const { getHealthyModelIds } = require("../lib/modelHealth");
 const { validatePrompt: _validatePrompt, validateContestantResponse: _validateContestantResponse } = require("../lib/validation");
 const { validatePageToken, getLeaderboardItems, categorizeError } = require("../lib/fireHelpers");
 
@@ -33,8 +34,7 @@ function createFireRouter(deps) {
   const authMw = deps.authMiddleware;
   const requireKnownOrigin = deps.requireKnownOrigin;
 
-  const dailyLimitExceeded = deps.dailyLimitExceeded || function() { return false; };
-  const dailyIncrement = deps.dailyIncrement || function() {};
+  const dailyTryIncrement = deps.dailyTryIncrement || function() { return { allowed: true }; };
 
   router.get("/api/history", deps.publicLimiter, function(req, res) {
     res.json({
@@ -67,13 +67,14 @@ function createFireRouter(deps) {
     }
   });
 
-  router.post("/api/fire", fireLimiter, authMw.requireAuth, requireKnownOrigin, async function(req, res) {
+  router.post("/api/fire", fireLimiter, requireKnownOrigin, async function(req, res) {
     const validateToken = deps.validatePageToken || validatePageToken;
     if (!validateToken(req.headers["x-page-token"])) {
       return res.status(403).json({ error: "Forbidden." });
     }
 
-    if ((deps.dailyLimitExceeded || dailyLimitExceeded)("fire")) {
+    const inc = (deps.dailyTryIncrement || dailyTryIncrement)("fire");
+    if (!inc.allowed) {
       return res.status(503).json({ error: "Daily request limit reached. Try again tomorrow." });
     }
 
@@ -88,8 +89,11 @@ function createFireRouter(deps) {
       return res.status(400).json({ error: "Invalid model ID." });
     }
 
+    if (!getHealthyModelIds([modelId]).length) {
+      return res.status(503).json({ error: "Model temporarily unavailable due to repeated failures.", modelId: modelId });
+    }
+
     try {
-      (deps.dailyIncrement || dailyIncrement)("fire");
       const response = await callContestant(modelId, getVoice(modelId, packId), prompt, req.requestId);
       var checked = validateContestantResponse(response);
       if (!checked.ok) {
@@ -116,7 +120,11 @@ function createFireRouter(deps) {
   });
 
   // Blind taste test mapping — generated server-side, tamper-proof
-  router.get("/api/blind-mapping", authMw.requireAuth, function(req, res) {
+  router.get("/api/blind-mapping", function(req, res) {
+    const validateToken = deps.validatePageToken || validatePageToken;
+    if (!validateToken(req.headers["x-page-token"])) {
+      return res.status(403).json({ error: "Forbidden." });
+    }
     try {
       const shuffled = ACTIVE_MODEL_IDS.slice();
       for (var i = shuffled.length - 1; i > 0; i--) {

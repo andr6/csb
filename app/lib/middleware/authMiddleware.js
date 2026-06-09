@@ -37,7 +37,6 @@ function createAuthMiddleware(deps) {
       emailVerified: Boolean(user.email_verified),
       phoneVerified: Boolean(user.phone_verified),
       firstLoginCompleted: Boolean(user.first_login_completed),
-      customModeEnabled: Boolean(user.custom_mode_access_enabled),
     };
     next();
   }
@@ -49,17 +48,9 @@ function createAuthMiddleware(deps) {
     next();
   }
 
-  function requireCustomModeAccess(req, res, next) {
-    if (!req.user || !req.user.customModeEnabled) {
-      return res.status(403).json({ error: "Custom Mode access not enabled." });
-    }
-    next();
-  }
-
   return {
     requireAuth,
     requirePhoneVerified,
-    requireCustomModeAccess,
   };
 }
 

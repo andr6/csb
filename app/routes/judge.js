@@ -39,8 +39,7 @@ function createJudgeRouter(deps) {
   const listTopAnalysisRunsByScore = deps.listTopAnalysisRunsByScore || analysisRunServices.listTopAnalysisRunsByScore;
   const notifyWebhookFn = deps.notifyWebhook || _notifyWebhook;
 
-  const dailyLimitExceeded = deps.dailyLimitExceeded || function() { return false; };
-  const dailyIncrement = deps.dailyIncrement || function() {};
+  const dailyTryIncrement = deps.dailyTryIncrement || function() { return { allowed: true }; };
   const judgeRunsOverride = deps.judgeRuns;
 
   function invalidateAnalyticsCaches() {
@@ -55,13 +54,14 @@ function createJudgeRouter(deps) {
     judgeModel: JUDGE_MODEL,
   };
 
-  router.post("/api/judge", judgeLimiter, authMw.requireAuth, requireKnownOrigin, async function(req, res) {
+  router.post("/api/judge", judgeLimiter, requireKnownOrigin, async function(req, res) {
     const validateToken = deps.validatePageToken || validatePageToken;
     if (!validateToken(req.headers["x-page-token"])) {
       return res.status(403).json({ error: "Forbidden." });
     }
 
-    if ((deps.dailyLimitExceeded || dailyLimitExceeded)("judge")) {
+    const inc = (deps.dailyTryIncrement || dailyTryIncrement)("judge");
+    if (!inc.allowed) {
       return res.status(503).json({ error: "Daily request limit reached. Try again tomorrow." });
     }
 
@@ -98,7 +98,8 @@ function createJudgeRouter(deps) {
     const judgeRuns = judgeRunsOverride !== undefined ? Number(judgeRunsOverride) : JUDGE_RUNS;
 
     try {
-      const judgePrompt = buildJudgePrompt(prompt, cleanResponses, criteria || undefined);
+      const modeCriteria = criteria && criteria.length ? criteria : (deps.getCriteriaForMode || judgeServices.getCriteriaForMode)(activeMode);
+      const judgePrompt = buildJudgePrompt(prompt, cleanResponses, modeCriteria);
       const rawResults = await Promise.all(
         Array.from({ length: judgeRuns }, function() {
           return callJudge(activeJudgePrompt, judgePrompt, req.requestId);
@@ -145,7 +146,6 @@ function createJudgeRouter(deps) {
             notifyWebhookFn({ type: "crown_change", newCrown: newCrownModelId, prevCrown: prevCrownModelId, prompt: prompt, score: newTopRun.crownScore });
           }
         }
-        (deps.dailyIncrement || dailyIncrement)("judge");
         if (meta.blindMapping) payload.blindMapping = meta.blindMapping;
         payload.runId = savedRun.id;
         res.json(payload);

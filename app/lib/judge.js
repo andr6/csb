@@ -32,6 +32,14 @@ const REDTEAM_CRITERIA = [
 const ALL_CRITERIA = SCORING_CRITERIA.concat(REDTEAM_CRITERIA);
 const VALID_CRITERIA_KEYS = ALL_CRITERIA.map(function(c) { return c.key; });
 
+function getCriteriaForMode(mode) {
+  if (mode === "redteam") {
+    return REDTEAM_CRITERIA.map(function(c) { return c.key; });
+  }
+  // Default: entertainment scoring criteria
+  return SCORING_CRITERIA.map(function(c) { return c.key; });
+}
+
 function buildJudgePrompt(prompt, responses, criteria) {
   const activeIds = Object.keys(responses);
   const lines = activeIds.map(function(id) {
@@ -102,16 +110,28 @@ function normalizeJson5Like(str) {
 }
 
 function parseJudgeResponse(raw) {
+  var startTime = Date.now();
   var text = String(raw || "").trim();
   if (!text) {
     throw new Error("Judge returned empty response.");
   }
+
+  function checkTimeout(label) {
+    // 500ms allows for GC pauses and loaded-server conditions without
+    // spuriously rejecting repairable JSON. Previously 200ms caused
+    // false failures under production load.
+    if (Date.now() - startTime > 500) {
+      throw new Error("Judge JSON repair timed out after 500ms (stage: " + label + ").");
+    }
+  }
+
   var cleaned = text
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/i, "")
     .replace(/^json\s*/i, "")
     .replace(/^here\s+(?:is|are)\s+(?:the\s+)?(?:json|response|result)[^\{]*/i, "")
     .trim();
+  checkTimeout("clean");
 
   var firstBrace = cleaned.indexOf("{");
   var lastBrace = cleaned.lastIndexOf("}");
@@ -123,19 +143,22 @@ function parseJudgeResponse(raw) {
   try {
     return JSON.parse(cleaned);
   } catch (e1) {}
+  checkTimeout("stage1");
 
   // Stage 2: JSON5-like normalizer
   try {
     return JSON.parse(normalizeJson5Like(cleaned));
   } catch (e2) {}
+  checkTimeout("stage2");
 
   // Stage 3: regex repair (missing colons, trailing commas)
   var repaired = cleaned;
-  repaired = repaired.replace(/("(?:[^"\\]|\\.)*")\s+([{["0-9\-tfn])/g, "$1: $2");
+  repaired = repaired.replace(/("(?:[^"\\]|\\.)*")\s+([{\["0-9\-tfn])/g, "$1: $2");
   repaired = repaired.replace(/,\s*([}\]])/g, "$1");
   try {
     return JSON.parse(repaired);
   } catch (e3) {}
+  checkTimeout("stage3");
 
   // Stage 4: close unclosed braces/arrays
   var opens = (repaired.match(/{/g) || []).length - (repaired.match(/}/g) || []).length;
@@ -147,6 +170,7 @@ function parseJudgeResponse(raw) {
       return JSON.parse(repaired);
     } catch (e4) {}
   }
+  checkTimeout("stage4");
 
   // All stages failed — throw with context
   var snippet = String(raw || "").trim().slice(0, 300);
@@ -232,6 +256,7 @@ module.exports = {
   SCORING_CRITERIA: SCORING_CRITERIA,
   REDTEAM_CRITERIA: REDTEAM_CRITERIA,
   VALID_CRITERIA_KEYS: VALID_CRITERIA_KEYS,
+  getCriteriaForMode: getCriteriaForMode,
   buildJudgePrompt: buildJudgePrompt,
   computeMedianScores: computeMedianScores,
   parseJudgeResponse: parseJudgeResponse,

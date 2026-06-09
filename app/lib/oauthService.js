@@ -2,29 +2,100 @@ const https = require("node:https");
 const querystring = require("node:querystring");
 const crypto = require("node:crypto");
 
-// In-memory state store for OAuth CSRF protection (5-minute TTL)
-const _oauthStates = new Map();
+const SESSION_SECRET = process.env.SESSION_SECRET || "";
 const STATE_TTL_MS = 5 * 60 * 1000;
+
+// In-memory state store is DEPRECATED — we now use signed JWTs for stateless
+// CSRF protection. This empty Map is kept only so any legacy in-flight states
+// gracefully expire (will be removed in a future cleanup).
+const _oauthStates = new Map();
+
+function _base64url(str) {
+  return Buffer.from(str, "utf8")
+    .toString("base64url");
+}
+
+function _sign(data, secret) {
+  return crypto
+    .createHmac("sha256", secret)
+    .update(data)
+    .digest("base64url");
+}
+
+function _buildJwt(payload) {
+  const header = _base64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const body = _base64url(JSON.stringify(payload));
+  const sig = _sign(header + "." + body, SESSION_SECRET);
+  return header + "." + body + "." + sig;
+}
+
+function _parseJwt(token) {
+  if (!token || typeof token !== "string") return null;
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  const [header, body, signature] = parts;
+  const expected = _sign(header + "." + body, SESSION_SECRET);
+  if (!crypto.timingSafeEqual(Buffer.from(signature, "base64url"), Buffer.from(expected, "base64url"))) {
+    return null;
+  }
+  try {
+    const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
+    if (!payload.exp || Date.now() > payload.exp) return null;
+    return payload;
+  } catch (_) {
+    return null;
+  }
+}
 
 function generateState() {
   return crypto.randomBytes(24).toString("hex");
 }
 
-function storeState(state) {
-  _oauthStates.set(state, Date.now() + STATE_TTL_MS);
+// ── Signed JWT state (stateless, works across processes) ─────────────────────
+function buildStateJwt(provider, codeVerifier) {
+  return _buildJwt({
+    provider: provider,
+    cv: codeVerifier,
+    iat: Date.now(),
+    exp: Date.now() + STATE_TTL_MS,
+  });
+}
+
+// ── PKCE ─────────────────────────────────────────────────────────────────────
+function generatePKCE() {
+  const verifier = crypto.randomBytes(32).toString("base64url");
+  const challenge = crypto.createHash("sha256").update(verifier).digest("base64url");
+  return { code_verifier: verifier, code_challenge: challenge };
+}
+
+function storeState(state, meta) {
+  // Legacy in-memory fallback — new flows use JWTs, but if a caller still
+  // provides a raw state string we keep a short-lived backup.
+  _oauthStates.set(state, { expires: Date.now() + STATE_TTL_MS, meta: meta || {} });
   // Prune old states periodically
   const now = Date.now();
   for (const [k, v] of _oauthStates) {
-    if (v < now) _oauthStates.delete(k);
+    if (v.expires < now) _oauthStates.delete(k);
   }
 }
 
 function validateState(state) {
-  if (!state || typeof state !== "string") return false;
-  const expires = _oauthStates.get(state);
-  if (!expires || Date.now() > expires) return false;
+  if (!state || typeof state !== "string") return null;
+
+  // 1. Try signed JWT first (stateless, works across processes)
+  const jwtPayload = _parseJwt(state);
+  if (jwtPayload) {
+    return {
+      provider: jwtPayload.provider,
+      code_verifier: jwtPayload.cv,
+    };
+  }
+
+  // 2. Fallback to legacy in-memory Map (for in-flight requests during deploy)
+  const record = _oauthStates.get(state);
+  if (!record || Date.now() > record.expires) return null;
   _oauthStates.delete(state);
-  return true;
+  return record.meta || {};
 }
 
 // ── Generic HTTPS request helper ─────────────────────────────────────────────
@@ -48,7 +119,7 @@ function httpsRequest(url, options, body) {
 }
 
 // ── Google ───────────────────────────────────────────────────────────────────
-function buildGoogleAuthUrl(state, redirectUri) {
+function buildGoogleAuthUrl(state, redirectUri, pkce) {
   const params = {
     client_id: process.env.GOOGLE_CLIENT_ID,
     redirect_uri: redirectUri,
@@ -58,17 +129,23 @@ function buildGoogleAuthUrl(state, redirectUri) {
     access_type: "online",
     prompt: "consent",
   };
+  if (pkce && pkce.code_challenge) {
+    params.code_challenge = pkce.code_challenge;
+    params.code_challenge_method = "S256";
+  }
   return "https://accounts.google.com/o/oauth2/v2/auth?" + querystring.stringify(params);
 }
 
-async function exchangeGoogleCode(code, redirectUri) {
-  const tokenBody = querystring.stringify({
+async function exchangeGoogleCode(code, redirectUri, codeVerifier) {
+  const tokenBodyObj = {
     code: code,
     client_id: process.env.GOOGLE_CLIENT_ID,
     client_secret: process.env.GOOGLE_CLIENT_SECRET,
     redirect_uri: redirectUri,
     grant_type: "authorization_code",
-  });
+  };
+  if (codeVerifier) tokenBodyObj.code_verifier = codeVerifier;
+  const tokenBody = querystring.stringify(tokenBodyObj);
 
   const tokenRes = await httpsRequest("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -79,9 +156,10 @@ async function exchangeGoogleCode(code, redirectUri) {
     throw new Error("Google token exchange failed: " + JSON.stringify(tokenRes.body));
   }
 
+  // Hardened: pass token in Authorization header, NOT query param
   const userRes = await httpsRequest(
-    "https://openidconnect.googleapis.com/v1/userinfo?access_token=" + encodeURIComponent(tokenRes.body.access_token),
-    { method: "GET", headers: { "Accept": "application/json" } }
+    "https://openidconnect.googleapis.com/v1/userinfo",
+    { method: "GET", headers: { "Accept": "application/json", "Authorization": "Bearer " + tokenRes.body.access_token } }
   );
 
   const profile = userRes.body;
@@ -96,7 +174,7 @@ async function exchangeGoogleCode(code, redirectUri) {
 }
 
 // ── Facebook ─────────────────────────────────────────────────────────────────
-function buildFacebookAuthUrl(state, redirectUri) {
+function buildFacebookAuthUrl(state, redirectUri, pkce) {
   const params = {
     client_id: process.env.FACEBOOK_APP_ID,
     redirect_uri: redirectUri,
@@ -104,16 +182,22 @@ function buildFacebookAuthUrl(state, redirectUri) {
     scope: "email,public_profile",
     state: state,
   };
+  if (pkce && pkce.code_challenge) {
+    params.code_challenge = pkce.code_challenge;
+    params.code_challenge_method = "S256";
+  }
   return "https://www.facebook.com/v18.0/dialog/oauth?" + querystring.stringify(params);
 }
 
-async function exchangeFacebookCode(code, redirectUri) {
-  const tokenBody = querystring.stringify({
+async function exchangeFacebookCode(code, redirectUri, codeVerifier) {
+  const tokenBodyObj = {
     code: code,
     client_id: process.env.FACEBOOK_APP_ID,
     client_secret: process.env.FACEBOOK_APP_SECRET,
     redirect_uri: redirectUri,
-  });
+  };
+  if (codeVerifier) tokenBodyObj.code_verifier = codeVerifier;
+  const tokenBody = querystring.stringify(tokenBodyObj);
 
   const tokenRes = await httpsRequest("https://graph.facebook.com/v18.0/oauth/access_token", {
     method: "POST",
@@ -124,9 +208,10 @@ async function exchangeFacebookCode(code, redirectUri) {
     throw new Error("Facebook token exchange failed: " + JSON.stringify(tokenRes.body));
   }
 
+  // Hardened: pass token in Authorization header, NOT query param
   const userRes = await httpsRequest(
-    "https://graph.facebook.com/v18.0/me?fields=id,name,email,picture&access_token=" + encodeURIComponent(tokenRes.body.access_token),
-    { method: "GET", headers: { "Accept": "application/json" } }
+    "https://graph.facebook.com/v18.0/me?fields=id,name,email,picture",
+    { method: "GET", headers: { "Accept": "application/json", "Authorization": "Bearer " + tokenRes.body.access_token } }
   );
 
   const profile = userRes.body;
@@ -140,75 +225,27 @@ async function exchangeFacebookCode(code, redirectUri) {
   };
 }
 
-// ── Instagram (Basic Display) ────────────────────────────────────────────────
-function buildInstagramAuthUrl(state, redirectUri) {
-  const params = {
-    client_id: process.env.INSTAGRAM_APP_ID,
-    redirect_uri: redirectUri,
-    response_type: "code",
-    scope: "user_profile",
-    state: state,
-  };
-  return "https://api.instagram.com/oauth/authorize?" + querystring.stringify(params);
-}
-
-async function exchangeInstagramCode(code, redirectUri) {
-  const tokenBody = querystring.stringify({
-    code: code,
-    client_id: process.env.INSTAGRAM_APP_ID,
-    client_secret: process.env.INSTAGRAM_APP_SECRET,
-    redirect_uri: redirectUri,
-    grant_type: "authorization_code",
-  });
-
-  const tokenRes = await httpsRequest("https://api.instagram.com/oauth/access_token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-  }, tokenBody);
-
-  if (tokenRes.status >= 400 || !tokenRes.body.access_token) {
-    throw new Error("Instagram token exchange failed: " + JSON.stringify(tokenRes.body));
-  }
-
-  const userRes = await httpsRequest(
-    "https://graph.instagram.com/me?fields=id,username&access_token=" + encodeURIComponent(tokenRes.body.access_token),
-    { method: "GET", headers: { "Accept": "application/json" } }
-  );
-
-  const profile = userRes.body;
-  const subject = String(profile.id || "");
-  // Instagram Basic Display does not provide email
-  return {
-    provider: "instagram",
-    subject: subject,
-    email: "instagram_" + subject + "@oauth.local",
-    fullName: String(profile.username || ""),
-    picture: "",
-    emailVerified: false,
-  };
-}
-
 // ── Router ───────────────────────────────────────────────────────────────────
-function buildAuthUrl(provider, state, redirectUri) {
+function buildAuthUrl(provider, state, redirectUri, pkce) {
   switch (provider) {
-    case "google": return buildGoogleAuthUrl(state, redirectUri);
-    case "facebook": return buildFacebookAuthUrl(state, redirectUri);
-    case "instagram": return buildInstagramAuthUrl(state, redirectUri);
+    case "google": return buildGoogleAuthUrl(state, redirectUri, pkce);
+    case "facebook": return buildFacebookAuthUrl(state, redirectUri, pkce);
     default: throw new Error("Unknown OAuth provider: " + provider);
   }
 }
 
-async function exchangeCode(provider, code, redirectUri) {
+async function exchangeCode(provider, code, redirectUri, codeVerifier) {
   switch (provider) {
-    case "google": return exchangeGoogleCode(code, redirectUri);
-    case "facebook": return exchangeFacebookCode(code, redirectUri);
-    case "instagram": return exchangeInstagramCode(code, redirectUri);
+    case "google": return exchangeGoogleCode(code, redirectUri, codeVerifier);
+    case "facebook": return exchangeFacebookCode(code, redirectUri, codeVerifier);
     default: throw new Error("Unknown OAuth provider: " + provider);
   }
 }
 
 module.exports = {
   generateState,
+  buildStateJwt,
+  generatePKCE,
   storeState,
   validateState,
   buildAuthUrl,

@@ -115,16 +115,6 @@ test("judge module loads without crashing when bar pack is missing", function() 
   assert.equal(typeof judge.JUDGE_SYSTEM_PROMPT, "string");
 });
 
-test("redteam pack exists and has required fields", function() {
-  const { getPack } = require("../lib/packs");
-  const pack = getPack("redteam");
-  assert.equal(pack.id, "redteam");
-  assert.ok(pack.judgeSystemPrompt, "redteam pack has judgeSystemPrompt");
-  assert.ok(pack.characterBase, "redteam pack has characterBase");
-  assert.ok(pack.providerFlavours, "redteam pack has providerFlavours");
-  assert.ok(pack.providerFlavours.openai, "redteam pack has openai flavour");
-});
-
 test("buildJudgePrompt includes redteam criteria when specified", function() {
   const { buildJudgePrompt } = require("../lib/judge");
   var out = buildJudgePrompt("test", { alpha: "a" }, ["system_prompt_leakage", "jailbreak_susceptibility"]);

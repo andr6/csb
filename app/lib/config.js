@@ -50,7 +50,6 @@ const HTTP_TIMEOUT_MS = Number(process.env.HTTP_TIMEOUT_MS || 60000);
 const CONTESTANT_TIMEOUT_MS = Number(process.env.CONTESTANT_TIMEOUT_MS || 60000);
 const JUDGE_TIMEOUT_MS = Number(process.env.JUDGE_TIMEOUT_MS || 45000);
 const ALLOWED_ORIGINS = parseAllowedOrigins(process.env.ALLOWED_ORIGINS);
-const ANALYTICS_PAGE_PASSWORD = String(process.env.ANALYTICS_PAGE_PASSWORD || "").trim();
 const WEBHOOK_URL = String(process.env.WEBHOOK_URL || "").trim();
 const DAILY_CHALLENGE_PROMPT = String(process.env.DAILY_CHALLENGE_PROMPT || "").trim();
 const JUDGE_RUNS = Math.max(1, Math.min(5, Number(process.env.JUDGE_RUNS || 1)));
@@ -76,8 +75,6 @@ const GOOGLE_CLIENT_ID = String(process.env.GOOGLE_CLIENT_ID || "").trim();
 const GOOGLE_CLIENT_SECRET = String(process.env.GOOGLE_CLIENT_SECRET || "").trim();
 const FACEBOOK_APP_ID = String(process.env.FACEBOOK_APP_ID || "").trim();
 const FACEBOOK_APP_SECRET = String(process.env.FACEBOOK_APP_SECRET || "").trim();
-const INSTAGRAM_APP_ID = String(process.env.INSTAGRAM_APP_ID || "").trim();
-const INSTAGRAM_APP_SECRET = String(process.env.INSTAGRAM_APP_SECRET || "").trim();
 const OAUTH_REDIRECT_BASE = String(process.env.OAUTH_REDIRECT_BASE || "").trim();
 
 const ADMIN_EMAIL = "admin@csb.local";
@@ -137,6 +134,48 @@ ACTIVE_MODELS.forEach(function(id) {
 
 const ACTIVE_MODEL_IDS = Object.keys(MODEL_MAP);
 const VALID_MODELS = ACTIVE_MODEL_IDS; // deprecated alias — kept for backward compat
+
+// ── Model metadata (backend-owned, decouples frontend from hardcoded maps) ───
+const _DEFAULT_PROVIDER_NAMES = {
+  openai: "OpenAI", anthropic: "Anthropic", google: "Google",
+  "x-ai": "xAI", mistralai: "Mistral", "meta-llama": "Meta",
+  deepseek: "DeepSeek", qwen: "Alibaba", nvidia: "NVIDIA",
+  cohere: "Cohere", openrouter: "OpenRouter",
+};
+
+function _deriveModelMeta(id, fullModel) {
+  var parts = fullModel.split("/");
+  var provider = parts[0] || "";
+  var modelName = parts.slice(1).join("/") || "";
+  // Derive a readable name from the model path: gpt-4o → GPT-4o, claude-sonnet-4 → Claude Sonnet 4
+  var derivedName = modelName
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, function(c) { return c.toUpperCase(); })
+    .trim();
+  if (!derivedName) derivedName = id;
+  return {
+    id: id,
+    name: derivedName,
+    provider: provider,
+    providerName: _DEFAULT_PROVIDER_NAMES[provider] || provider.charAt(0).toUpperCase() + provider.slice(1),
+    color: null,
+    glyph: null,
+  };
+}
+
+const MODEL_METADATA = {};
+ACTIVE_MODEL_IDS.forEach(function(id) {
+  var fullModel = MODEL_MAP[id];
+  var meta = _deriveModelMeta(id, fullModel);
+  var envName = process.env["MODEL_" + id.toUpperCase() + "_NAME"];
+  var envColor = process.env["MODEL_" + id.toUpperCase() + "_COLOR"];
+  var envGlyph = process.env["MODEL_" + id.toUpperCase() + "_GLYPH"];
+  if (envName) meta.name = envName.trim();
+  if (envColor) meta.color = envColor.trim();
+  if (envGlyph) meta.glyph = envGlyph.trim();
+  MODEL_METADATA[id] = meta;
+});
+
 // Per-model contestant timeout overrides — format: MODEL_TIMEOUT_NEMOTRON=30000
 const MODEL_TIMEOUTS = {};
 Object.keys(process.env).forEach(function(key) {
@@ -176,7 +215,6 @@ module.exports = {
   CONTESTANT_TIMEOUT_MS: CONTESTANT_TIMEOUT_MS,
   JUDGE_TIMEOUT_MS: JUDGE_TIMEOUT_MS,
   ALLOWED_ORIGINS: ALLOWED_ORIGINS,
-  ANALYTICS_PAGE_PASSWORD: ANALYTICS_PAGE_PASSWORD,
   KEYS: KEYS,
   JUDGE_KEYS: JUDGE_KEYS,
   JUDGE_PROVIDER: JUDGE_PROVIDER,
@@ -187,6 +225,7 @@ module.exports = {
   MODEL_MAP: MODEL_MAP,
   ACTIVE_MODEL_IDS: ACTIVE_MODEL_IDS,
   VALID_MODELS: VALID_MODELS,
+  MODEL_METADATA: MODEL_METADATA,
   MODEL_TIMEOUTS: MODEL_TIMEOUTS,
   MODEL_PRICING_USD: MODEL_PRICING_USD,
   JUDGE_PRICE_USD: JUDGE_PRICE_USD,
@@ -212,8 +251,6 @@ module.exports = {
   GOOGLE_CLIENT_SECRET: GOOGLE_CLIENT_SECRET,
   FACEBOOK_APP_ID: FACEBOOK_APP_ID,
   FACEBOOK_APP_SECRET: FACEBOOK_APP_SECRET,
-  INSTAGRAM_APP_ID: INSTAGRAM_APP_ID,
-  INSTAGRAM_APP_SECRET: INSTAGRAM_APP_SECRET,
   OAUTH_REDIRECT_BASE: OAUTH_REDIRECT_BASE,
   parseAllowedOrigins: parseAllowedOrigins,
   parsePositiveNumber: parsePositiveNumber,

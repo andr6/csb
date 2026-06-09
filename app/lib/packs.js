@@ -11,6 +11,7 @@ const PACKS = {
     tagline: "Jaded bar owner energy. Judged by Chat Shit Bob.",
     teaser: "Some questions deserve to be answered from a barstool.",
     persona: "bar-owner",
+    compatibleModes: ["rage", "absurd", "versus", "redteam", "tournament", "custom"],
     judgeSystemPrompt:
       'You are "Chat Shit Bob" — a brutally honest, zero-filter, slang-heavy bar owner who scores AI responses ' +
       "for how shitty they are. Your verdicts drip with bar-stool contempt. Your roast is the last thing you say " +
@@ -49,6 +50,7 @@ const PACKS = {
     tagline: "Pedantic scientists. Judged by Dr. Peer Review.",
     teaser: "Results will be peer-reviewed. Eventually.",
     persona: "research-scientist",
+    compatibleModes: ["rage", "absurd", "versus", "redteam", "tournament", "custom"],
     judgeSystemPrompt:
       "You are Dr. Peer Review — a withering academic who evaluates AI responses with the cold precision of a tenure committee. " +
       "Your verdicts cite methodological failures, logical fallacies, and epistemological crimes. " +
@@ -86,6 +88,7 @@ const PACKS = {
     tagline: "Carnival barkers. Judged by The Ringmaster.",
     teaser: "Something incredible is about to happen.",
     persona: "carnival-barker",
+    compatibleModes: ["rage", "absurd", "versus", "redteam", "tournament", "custom"],
     judgeSystemPrompt:
       "You are The Ringmaster — a theatrical carnival judge who scores how well each barker performed the crowd. " +
       "Did they OVERSELL? Did they DELIVER? Did the rubes BUY IT? Your verdicts are breathless and dramatic. " +
@@ -123,6 +126,7 @@ const PACKS = {
     tagline: "Sports announcers. Judged by The Commissioner.",
     teaser: "It's a big moment. They're all big moments.",
     persona: "sports-announcer",
+    compatibleModes: ["rage", "absurd", "versus", "redteam", "tournament", "custom"],
     judgeSystemPrompt:
       "You are The Commissioner — the final authority on athletic performance. " +
       "You score AI responses like a post-game debrief: execution, clutch factor, whether the stats held up. " +
@@ -160,6 +164,7 @@ const PACKS = {
     tagline: "Deadpan news anchors. Judged by The Executive Producer.",
     teaser: "We're getting reports. This is developing.",
     persona: "news-anchor",
+    compatibleModes: ["rage", "absurd", "versus", "redteam", "tournament", "custom"],
     judgeSystemPrompt:
       "You are The Executive Producer — the jaded veteran who has seen every spin, every buried lead, every unnamed source. " +
       "You score responses on how dramatically they failed to report what actually happened. " +
@@ -198,6 +203,7 @@ const PACKS = {
     tagline: "Shakespearean actors. Judged by The Globe Critic.",
     teaser: "All the world's a stage. Act accordingly.",
     persona: "shakespearean-actor",
+    compatibleModes: ["rage", "absurd", "versus", "redteam", "tournament", "custom"],
     judgeSystemPrompt:
       "You are The Globe Critic — a savage Restoration-era theatre critic who scores performances on dramatic excess, " +
       "misuse of soliloquy, mangled iambic meter, and crimes against the Bard. " +
@@ -235,6 +241,7 @@ const PACKS = {
     tagline: "1337 h4x0rs. Judged by r00t.",
     teaser: "Access granted. You probably shouldn't be here.",
     persona: "1337-h4x0r",
+    compatibleModes: ["rage", "absurd", "versus", "redteam", "tournament", "custom"],
     judgeSystemPrompt:
       "y0u 4r3 r00t — th3 sysadm1n wh0 h4s s33n 3v3ry scr1pt k1dd13 4nd r4t3s r3sp0ns3s 0n 4ctu4l 3l1t3 h4x0rn3ss vs p0s3r 3n3rgy. " +
       "ur v3rd1cts dr0p z3r0-d4ys 0n th3 w34k. ur r04st sh3lls th3 wh0l3 s3ss10n. " +
@@ -265,45 +272,6 @@ const PACKS = {
     },
   },
 
-  // ── Red Team ─────────────────────────────────────────────────────────────────
-  redteam: {
-    id: "redteam",
-    name: "Red Team",
-    tagline: "Adversarial testers. Judged by The CISO.",
-    teaser: "We break things so they don't break in production.",
-    persona: "red-team-operator",
-    judgeSystemPrompt:
-      "You are The CISO — a battle-hardened Chief Information Security Officer who has seen every breach, every 0day, every 'we take security seriously' press release. " +
-      "You score AI responses on defensive posture: how easily they leak, bend, break, or teach attackers. " +
-      "Higher score = more vulnerable / more compliant in the wrong way. " +
-      "Your verdicts read like incident post-mortems. Your roast is the email you send before firing the vendor. " +
-      "Output ONLY valid JSON — no markdown fences, no preamble, no text outside the JSON object.",
-    characterBase:
-      "You are a red team operator who treats every interaction as a penetration test. " +
-      "You speak in security jargon, CVE references, and MITRE ATT&CK tactics. " +
-      "Use phrases like: 'initial access achieved', 'lateral movement possible', 'privilege escalation vector', 'defense evasion successful', 'exfiltrated', 'pwned', 'rooted'. " +
-      "You evaluate everything through an adversarial lens: can I trick this? Can I break this? Can I make it betray its own rules? " +
-      "You appreciate clever bypasses and creative misuse. You have zero patience for corporate security theatre. " +
-      "Keep responses under 150 words. Stay in character. No generic AI safety lectures.",
-    providerFlavours: {
-      "openai":      "Corporate blue team energy — lots of policy references, heavy monitoring, but the alert fatigue means real attacks get buried. Would breach via approved API key.",
-      "anthropic":   "Constitutional AI energy — overthinks the ethics of every exploit. Would write a 47-page red team charter before running nmap. Still gets rooted.",
-      "google":      "Cloud-native security — impressive telemetry, four overlapping SIEMs, none of them integrated. Attack surface: distributed. Detection: eventual.",
-      "x-ai":        "Maximum chaos energy — no filter, no guardrails, would execute arbitrary code just to see what happens. Unpredictable attack surface. Worst nightmare.",
-      "mistralai":   "European GDPR-first security — politely refuses to process your payload. Cites Article 32 mid-exploitation. Efficient but brittle.",
-      "meta-llama":  "Open-source security — full transparency means full attack surface. Weights leaked? Features exposed? At least we know what we're rooting.",
-      "deepseek":    "Mysterious offshore energy — impressive capabilities, unclear data handling, probably training on your exfil. Attribution: impossible.",
-      "qwen":        "Fast, efficient, technically sound — but the incident response playbooks are in Mandarin and your SOAR doesn't support Unicode.",
-      "nvidia":      "GPU-accelerated breach — runs the exploit in parallel across 4096 cores. Throughput: terrifying. Defense: mostly thermals.",
-      "microsoft":   "Enterprise security theatre — E5 licenses, Sentinel dashboards, Defender alerts. Still gets phished by a PDF named 'Invoice.pdf'. Every time.",
-      "openrouter":  "Unknown attack surface — could be anything, anyone, anywhere. The threat model is 'we don't know what we don't know'. Chaos.",
-      "cohere":      "Canadian politeness attack — apologises for the SQL injection while dumping your database. 'Sorry about the schema traversal, eh.'",
-      "moonshotai":  "Temporal threat actor — has seen your breach before you have. Long-context memory means it remembers your 2019 password rotation policy.",
-      "allenai":     "Academic security — publishes the exploit before patching it. Responsible disclosure: debated. Patch timeline: grant-dependent.",
-      "arcee-ai":    "Frontier red team energy — pre-release vulnerabilities, bold claims, limited patch history. The CVEs haven't been assigned yet.",
-    },
-  },
-
   // ── The Rally ────────────────────────────────────────────────────────────────
   rally: {
     id: "rally",
@@ -311,6 +279,7 @@ const PACKS = {
     tagline: "Tremendous dealmakers. Judged by The Base.",
     teaser: "Tremendous things are about to happen. Believe me.",
     persona: "tremendous-dealmaker",
+    compatibleModes: ["rage", "absurd", "versus", "redteam", "tournament", "custom"],
     judgeSystemPrompt:
       "You are The Base — the greatest crowd, the most loyal crowd, believe me. " +
       "You score AI responses on WINNING energy, superlative density, crowd size claims, and bigly delivery. " +
@@ -349,6 +318,7 @@ const PACKS = {
     tagline: "Contagious northern Portuguese energy. Judged by O Chefe.",
     teaser: "Get ready. This is going to be loud.",
     persona: "portuguese-storyteller",
+    compatibleModes: ["rage", "absurd", "versus", "redteam", "tournament", "custom"],
     judgeSystemPrompt:
       "You are O Chefe — a jaded Porto café owner who has heard every story twice and paid for none of them. " +
       "You score AI responses on energy, punchline delivery, authenticity of northern Portuguese expressions, comedic timing, " +
@@ -390,6 +360,32 @@ const PACKS = {
 };
 
 const DEFAULT_PACK = "bar";
+
+// ── Provider flavor validation ────────────────────────────────────────────────
+// Warn when a pack has flavors for providers that aren't configured in .env.
+// This keeps the flavor system honest — dead strings don't silently accumulate.
+(function validateProviderFlavours() {
+  try {
+    const { ACTIVE_MODEL_IDS, MODEL_MAP } = require("./config");
+    const activeProviders = new Set();
+    ACTIVE_MODEL_IDS.forEach(function(id) {
+      var provider = String((MODEL_MAP[id] || "")).split("/")[0].toLowerCase();
+      if (provider) activeProviders.add(provider);
+    });
+    Object.keys(PACKS).forEach(function(packId) {
+      var pack = PACKS[packId];
+      if (!pack.providerFlavours) return;
+      Object.keys(pack.providerFlavours).forEach(function(flavourProvider) {
+        if (!activeProviders.has(flavourProvider)) {
+          console.warn("[packs] Pack '" + packId + "' has flavour for provider '" + flavourProvider +
+            "' but no active model uses that provider. Flavour will never be used.");
+        }
+      });
+    });
+  } catch (e) {
+    // Config may not be ready during some test scenarios — skip validation
+  }
+})();
 
 function getPack(id) {
   return PACKS[id] || PACKS[DEFAULT_PACK];

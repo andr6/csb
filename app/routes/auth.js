@@ -140,7 +140,6 @@ function createAuthRouter(deps) {
         emailVerified: true,
         phoneVerified: Boolean(user.phone_verified),
         firstLoginCompleted: Boolean(user.first_login_completed),
-        customModeEnabled: Boolean(user.custom_mode_access_enabled),
       },
     });
   });
@@ -218,7 +217,6 @@ function createAuthRouter(deps) {
         emailVerified: Boolean(user.email_verified),
         phoneVerified: Boolean(user.phone_verified),
         firstLoginCompleted: Boolean(user.first_login_completed),
-        customModeEnabled: Boolean(user.custom_mode_access_enabled),
       },
     });
   });
@@ -240,7 +238,6 @@ function createAuthRouter(deps) {
         emailVerified: req.user.emailVerified,
         phoneVerified: req.user.phoneVerified,
         firstLoginCompleted: req.user.firstLoginCompleted,
-        customModeEnabled: req.user.customModeEnabled,
         isAdmin: req.user.email === ADMIN_EMAIL,
       },
     });
@@ -270,7 +267,6 @@ function createAuthRouter(deps) {
     otpRepo.consumeOtp(validOtp.id);
     userRepo.markPhoneVerified(userId);
     userRepo.updateFirstLogin(userId);
-    userRepo.enableCustomMode(userId);
 
     // Issue fresh session token reflecting phone_verified = true
     sessionRepo.deleteByUser(userId);
@@ -284,7 +280,7 @@ function createAuthRouter(deps) {
     res.json({
       ok: true,
       token: freshToken,
-      message: "Phone verified. Custom Mode is now available.",
+      message: "Phone verified.",
       user: {
         id: userId,
         email: req.user.email,
@@ -292,7 +288,6 @@ function createAuthRouter(deps) {
         emailVerified: req.user.emailVerified,
         phoneVerified: true,
         firstLoginCompleted: true,
-        customModeEnabled: true,
       },
     });
   });
@@ -558,7 +553,6 @@ function createAuthRouter(deps) {
   const OAUTH_PROVIDERS = {
     google: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
     facebook: !!(process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET),
-    instagram: !!(process.env.INSTAGRAM_APP_ID && process.env.INSTAGRAM_APP_SECRET),
   };
 
   function getOAuthRedirectUri(provider, req) {
@@ -575,11 +569,11 @@ function createAuthRouter(deps) {
       return res.status(400).json({ error: "OAuth provider not configured." });
     }
 
-    const state = oauthService.generateState();
-    oauthService.storeState(state);
+    const pkce = oauthService.generatePKCE();
+    const state = oauthService.buildStateJwt(provider, pkce.code_verifier);
 
     const redirectUri = getOAuthRedirectUri(provider, req);
-    const authUrl = oauthService.buildAuthUrl(provider, state, redirectUri);
+    const authUrl = oauthService.buildAuthUrl(provider, state, redirectUri, pkce);
     res.redirect(authUrl);
   });
 
@@ -600,14 +594,15 @@ function createAuthRouter(deps) {
     if (!code) {
       return renderOAuthResult(res, { error: "Authorization code missing." });
     }
-    if (!oauthService.validateState(state)) {
+    const stateMeta = oauthService.validateState(state);
+    if (!stateMeta) {
       return renderOAuthResult(res, { error: "Invalid or expired OAuth state." });
     }
 
     let profile;
     try {
       const redirectUri = getOAuthRedirectUri(provider, req);
-      profile = await oauthService.exchangeCode(provider, code, redirectUri);
+      profile = await oauthService.exchangeCode(provider, code, redirectUri, stateMeta.code_verifier);
     } catch (e) {
       console.error("[oauth]", provider, "exchange failed:", e.message);
       return renderOAuthResult(res, { error: "OAuth token exchange failed." });
@@ -663,7 +658,6 @@ function createAuthRouter(deps) {
       emailVerified: Boolean(user.email_verified),
       phoneVerified: Boolean(user.phone_verified),
       firstLoginCompleted: Boolean(user.first_login_completed),
-      customModeEnabled: Boolean(user.custom_mode_access_enabled),
       isAdmin: user.email === ADMIN_EMAIL,
       oauthProvider: provider,
     };

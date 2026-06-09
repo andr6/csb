@@ -27,8 +27,10 @@ function tryOpen(DatabaseClass, wasm) {
   const db = new DatabaseClass(DB_PATH);
   if (wasm) {
     db.exec("PRAGMA journal_mode = WAL;");
+    db.exec("PRAGMA busy_timeout = 5000;");
   } else {
     db.pragma("journal_mode = WAL");
+    db.pragma("busy_timeout = 5000");
   }
   return db;
 }
@@ -90,6 +92,27 @@ function queryJsonParams(sql, params) {
   return getDb().prepare(sql).all(params || []);
 }
 
+function healthCheck() {
+  try {
+    const db = getDb();
+    db.prepare("SELECT 1").all([]);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function closeAndReopen() {
+  try {
+    if (_db && _db.close) {
+      _db.close();
+    }
+  } catch (_) {}
+  _db = null;
+  _dbError = null;
+  return getDb();
+}
+
 module.exports = {
   DB_PATH,
   DATA_DIR,
@@ -100,4 +123,6 @@ module.exports = {
   runSqlParams,
   queryJsonParams,
   isWasm: function() { return _usingWasm; },
+  healthCheck,
+  closeAndReopen,
 };

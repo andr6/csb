@@ -4,14 +4,14 @@ const rateLimit = require("express-rate-limit");
 function createPromptsRouter(deps) {
   const router = express.Router();
 
-  const authMw = deps.authMiddleware;
-  const requireAdminAccess = deps.requireAdminAccess;
+  const requireAdminAuth = deps.requireAdminAuth;
   const publicLimiter = deps.publicLimiter;
+  const authMw = deps.authMiddleware;
   const validatePrompt = deps.validatePrompt || require("../lib/validation").validatePrompt;
   const pendingPrompts = deps.pendingPrompts || require("../lib/repositories/pendingPromptsRepository");
   const tryCreateStore = deps.tryCreateStore;
 
-  // F10 — prompt submission (public, rate-limited)
+  // F10 — prompt submission (authenticated + rate-limited)
   const submitLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 3,
@@ -19,7 +19,7 @@ function createPromptsRouter(deps) {
     message: { error: "Too many submissions." },
   });
 
-  router.post("/api/prompts/submit", submitLimiter, authMw.requireAuth, function(req, res) {
+  router.post("/api/prompts/submit", submitLimiter, authMw.requireAuth, authMw.requirePhoneVerified, function(req, res) {
     const prompt = req.body && req.body.prompt;
     const mode = req.body && req.body.mode;
     const err = validatePrompt(prompt);
@@ -32,7 +32,7 @@ function createPromptsRouter(deps) {
     }
   });
 
-  router.get("/api/prompts/community", publicLimiter, authMw.requireAuth, function(req, res) {
+  router.get("/api/prompts/community", publicLimiter, function(req, res) {
     try {
       res.json({ items: pendingPrompts.getCommunityPrompts() });
     } catch (e) {
@@ -40,7 +40,7 @@ function createPromptsRouter(deps) {
     }
   });
 
-  router.get("/api/prompts/pending", authMw.requireAuth, requireAdminAccess, function(req, res) {
+  router.get("/api/prompts/pending", requireAdminAuth, function(req, res) {
     try {
       res.json({ items: pendingPrompts.listPending() });
     } catch (e) {
@@ -48,7 +48,7 @@ function createPromptsRouter(deps) {
     }
   });
 
-  router.post("/api/prompts/:id/approve", authMw.requireAuth, requireAdminAccess, function(req, res) {
+  router.post("/api/prompts/:id/approve", requireAdminAuth, function(req, res) {
     try {
       pendingPrompts.approvePrompt(req.params.id);
       res.json({ ok: true });
@@ -57,7 +57,7 @@ function createPromptsRouter(deps) {
     }
   });
 
-  router.post("/api/prompts/:id/reject", authMw.requireAuth, requireAdminAccess, function(req, res) {
+  router.post("/api/prompts/:id/reject", requireAdminAuth, function(req, res) {
     try {
       pendingPrompts.rejectPrompt(req.params.id);
       res.json({ ok: true });

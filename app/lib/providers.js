@@ -11,6 +11,7 @@ const {
   JUDGE_TIMEOUT_MS,
 } = require("./config");
 const { fetchJson, withTimeout } = require("./http");
+const { recordOutcome } = require("./modelHealth");
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  Provider plugin registry
@@ -55,7 +56,7 @@ function ensureModel(model, provider) {
   }
 }
 
-async function callOpenRouter(model, system, userPrompt, key, timeoutMs, requestId) {
+async function callOpenRouter(model, system, userPrompt, key, timeoutMs, requestId, jsonMode) {
   ensureModel(model, "openrouter");
   requireApiKey("openrouter", key);
   const headers = {
@@ -65,22 +66,24 @@ async function callOpenRouter(model, system, userPrompt, key, timeoutMs, request
     "X-Title": "Chat Shit Bob",
   };
   if (requestId) headers["X-Request-ID"] = requestId;
+  const body = {
+    model: model,
+    max_tokens: 2048,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: userPrompt },
+    ],
+  };
+  if (jsonMode) body.response_format = { type: "json_object" };
   const data = await fetchJson("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: headers,
-    body: JSON.stringify({
-      model: model,
-      max_tokens: 2048,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: userPrompt },
-      ],
-    }),
+    body: JSON.stringify(body),
   }, "OpenRouter", timeoutMs);
   return (data.choices && data.choices[0] && data.choices[0].message) ? data.choices[0].message.content : null;
 }
 
-async function callAnthropic(model, system, userPrompt, key, timeoutMs, requestId) {
+async function callAnthropic(model, system, userPrompt, key, timeoutMs, requestId, jsonMode) {
   ensureModel(model, "anthropic");
   requireApiKey("anthropic", key);
   const modelName = model.includes("/") ? model.split("/").slice(1).join("/") : model;
@@ -90,20 +93,22 @@ async function callAnthropic(model, system, userPrompt, key, timeoutMs, requestI
     "anthropic-version": "2023-06-01",
   };
   if (requestId) headers["X-Request-ID"] = requestId;
+  const body = {
+    model: modelName,
+    max_tokens: 2048,
+    system: system,
+    messages: [{ role: "user", content: userPrompt }],
+  };
+  if (jsonMode) body.response_format = { type: "json_object" };
   const data = await fetchJson("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: headers,
-    body: JSON.stringify({
-      model: modelName,
-      max_tokens: 2048,
-      system: system,
-      messages: [{ role: "user", content: userPrompt }],
-    }),
+    body: JSON.stringify(body),
   }, "Anthropic", timeoutMs);
   return (data.content && data.content[0]) ? data.content[0].text : null;
 }
 
-async function callOpenAI(model, system, userPrompt, key, timeoutMs, requestId) {
+async function callOpenAI(model, system, userPrompt, key, timeoutMs, requestId, jsonMode) {
   ensureModel(model, "openai");
   requireApiKey("openai", key);
   const modelName = model.includes("/") ? model.split("/").slice(1).join("/") : model;
@@ -112,28 +117,32 @@ async function callOpenAI(model, system, userPrompt, key, timeoutMs, requestId) 
     "Authorization": "Bearer " + key,
   };
   if (requestId) headers["X-Request-ID"] = requestId;
+  const body = {
+    model: modelName,
+    max_tokens: 2048,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: userPrompt },
+    ],
+  };
+  if (jsonMode) body.response_format = { type: "json_object" };
   const data = await fetchJson("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: headers,
-    body: JSON.stringify({
-      model: modelName,
-      max_tokens: 2048,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: userPrompt },
-      ],
-    }),
+    body: JSON.stringify(body),
   }, "OpenAI", timeoutMs);
   return (data.choices && data.choices[0] && data.choices[0].message) ? data.choices[0].message.content : null;
 }
 
-async function callGemini(model, system, userPrompt, key, timeoutMs, requestId) {
+async function callGemini(model, system, userPrompt, key, timeoutMs, requestId, jsonMode) {
   requireApiKey("gemini", key);
   var modelName = model.includes("/") ? model.split("/").slice(1).join("/") : model;
   ensureModel(modelName, "gemini");
 
   const headers = { "Content-Type": "application/json", "x-goog-api-key": key };
   if (requestId) headers["X-Request-ID"] = requestId;
+  const generationConfig = { maxOutputTokens: 2048 };
+  if (jsonMode) generationConfig.responseMimeType = "application/json";
   const data = await fetchJson(
     "https://generativelanguage.googleapis.com/v1beta/models/" + modelName + ":generateContent",
     {
@@ -142,7 +151,7 @@ async function callGemini(model, system, userPrompt, key, timeoutMs, requestId) 
       body: JSON.stringify({
         system_instruction: { parts: [{ text: system }] },
         contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-        generationConfig: { maxOutputTokens: 2048 },
+        generationConfig: generationConfig,
       }),
     },
     "Gemini",
@@ -154,7 +163,7 @@ async function callGemini(model, system, userPrompt, key, timeoutMs, requestId) 
     : null;
 }
 
-async function callLiteLLM(model, system, userPrompt, key, timeoutMs, requestId) {
+async function callLiteLLM(model, system, userPrompt, key, timeoutMs, requestId, jsonMode) {
   ensureModel(model, "litellm");
   requireApiKey("litellm", key);
   const headers = {
@@ -162,17 +171,19 @@ async function callLiteLLM(model, system, userPrompt, key, timeoutMs, requestId)
     "Authorization": "Bearer " + key,
   };
   if (requestId) headers["X-Request-ID"] = requestId;
+  const body = {
+    model: model,
+    max_tokens: 2048,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: userPrompt },
+    ],
+  };
+  if (jsonMode) body.response_format = { type: "json_object" };
   const data = await fetchJson(LITELLM_BASE + "/chat/completions", {
     method: "POST",
     headers: headers,
-    body: JSON.stringify({
-      model: model,
-      max_tokens: 2048,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: userPrompt },
-      ],
-    }),
+    body: JSON.stringify(body),
   }, "LiteLLM", timeoutMs);
   return (data.choices && data.choices[0] && data.choices[0].message) ? data.choices[0].message.content : null;
 }
@@ -297,11 +308,11 @@ registerProvider("litellm", {
   },
 });
 
-function dispatch(provider, model, system, userPrompt, keys, timeoutMs, requestId) {
+function dispatch(provider, model, system, userPrompt, keys, timeoutMs, requestId, jsonMode) {
   const entry = _registry.get(provider);
   if (!entry) throw new Error("Unknown provider: " + provider);
   var key = keys[provider];
-  return entry.call(model, system, userPrompt, key, timeoutMs, requestId);
+  return entry.call(model, system, userPrompt, key, timeoutMs, requestId, jsonMode);
 }
 
 async function checkProviderHealth(provider, key) {
@@ -359,14 +370,20 @@ function callContestant(modelId, system, userPrompt, requestId) {
   const timeoutMs = MODEL_TIMEOUTS[modelId] || CONTESTANT_TIMEOUT_MS;
   if (requestId) console.log("[fire] [req:" + requestId + "] contestant " + modelId + " via " + CONTESTANT_PROVIDER);
   return withRetry(function() {
-    return dispatch(CONTESTANT_PROVIDER, model, system, userPrompt, KEYS, timeoutMs, requestId);
-  }, { maxRetries: 2 });
+    return dispatch(CONTESTANT_PROVIDER, model, system, userPrompt, KEYS, timeoutMs, requestId, false);
+  }, { maxRetries: 2 }).then(function(result) {
+    recordOutcome(modelId, true, null);
+    return result;
+  }).catch(function(err) {
+    recordOutcome(modelId, false, err && err.message ? err.message : String(err));
+    throw err;
+  });
 }
 
 function callJudge(system, userPrompt, requestId) {
   if (requestId) console.log("[judge] [req:" + requestId + "] judge via " + JUDGE_PROVIDER);
   return withRetry(function() {
-    return dispatch(JUDGE_PROVIDER, JUDGE_MODEL, system, userPrompt, JUDGE_KEYS, JUDGE_TIMEOUT_MS, requestId);
+    return dispatch(JUDGE_PROVIDER, JUDGE_MODEL, system, userPrompt, JUDGE_KEYS, JUDGE_TIMEOUT_MS, requestId, true);
   }, { maxRetries: 2 });
 }
 
@@ -379,4 +396,5 @@ module.exports = {
   dispatch: dispatch,
   withRetry: withRetry,
   checkProviderHealth: checkProviderHealth,
+  getHealthyModelIds: require("./modelHealth").getHealthyModelIds,
 };

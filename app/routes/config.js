@@ -6,6 +6,7 @@ const {
   JUDGE_PROVIDER,
   JUDGE_MODEL,
   MODEL_MAP,
+  MODEL_METADATA,
 } = require("../lib/config");
 const { PACKS } = require("../lib/packs");
 const judgeServices = require("../lib/judge");
@@ -36,7 +37,6 @@ function createConfigRouter(deps) {
             emailVerified: Boolean(u.email_verified),
             phoneVerified: Boolean(u.phone_verified),
             firstLoginCompleted: Boolean(u.first_login_completed),
-            customModeEnabled: Boolean(u.custom_mode_access_enabled),
             isAdmin: u.email === adminEmail,
           };
         }
@@ -45,15 +45,15 @@ function createConfigRouter(deps) {
     const OAUTH_PROVIDERS = {
       google: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
       facebook: !!(process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET),
-      instagram: !!(process.env.INSTAGRAM_APP_ID && process.env.INSTAGRAM_APP_SECRET),
     };
     res.json({
       contestantProvider: CONTESTANT_PROVIDER,
       models: MODEL_MAP,
+      modelsMeta: MODEL_METADATA,
       judgeProvider: JUDGE_PROVIDER,
       judgeModel: JUDGE_MODEL,
       packs: Object.values(PACKS).map(function(p) {
-        return { id: p.id, name: p.name, tagline: p.tagline, teaser: p.teaser || "", persona: p.persona || "" };
+        return { id: p.id, name: p.name, tagline: p.tagline, teaser: p.teaser || "", persona: p.persona || "", compatibleModes: p.compatibleModes || [] };
       }),
       criteria: judgeServices.SCORING_CRITERIA.map(function(c) { return { key: c.key, label: c.label }; }),
       redteamCriteria: judgeServices.REDTEAM_CRITERIA.map(function(c) { return { key: c.key, label: c.label }; }),

@@ -12,7 +12,7 @@ function createHealthRouter(deps) {
   const router = express.Router();
 
   const authMw = deps.authMiddleware;
-  const requireAdminAccess = deps.requireAdminAccess;
+  const requireAdminAuth = deps.requireAdminAuth;
   const checkProviderHealth = deps.checkProviderHealth || require("../lib/providers").checkProviderHealth;
 
   router.get("/api/health", async function(req, res) {

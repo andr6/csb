@@ -87,7 +87,7 @@ function createTournamentRouter(deps) {
     }
   }
 
-  router.post("/api/tournament", publicLimiter, authMw.requireAuth, function(req, res) {
+  router.post("/api/tournament", publicLimiter, function(req, res) {
     const models = Array.isArray(req.body.models) ? req.body.models : [];
     if (models.length < 2 || models.length > 16) {
       return res.status(400).json({ error: "Provide 2–16 model IDs." });
@@ -102,7 +102,7 @@ function createTournamentRouter(deps) {
     }
   });
 
-  router.get("/api/tournament/:id", publicLimiter, authMw.requireAuth, function(req, res) {
+  router.get("/api/tournament/:id", publicLimiter, function(req, res) {
     let tournament = _tournaments.get(req.params.id);
     if (!tournament) {
       // Cache miss — try DB
@@ -133,7 +133,7 @@ function createTournamentRouter(deps) {
     res.json(tournament);
   });
 
-  router.post("/api/tournament/:id/advance", publicLimiter, authMw.requireAuth, function(req, res) {
+  router.post("/api/tournament/:id/advance", publicLimiter, function(req, res) {
     const tournament = _tournaments.get(req.params.id);
     if (!tournament) return res.status(404).json({ error: "Tournament not found." });
     const roundIdx = Number(req.body.roundIdx);
@@ -150,7 +150,7 @@ function createTournamentRouter(deps) {
   });
 
   // E5 — auto-run a single tournament match server-side
-  router.post("/api/tournament/:id/run-match", publicLimiter, authMw.requireAuth, async function(req, res) {
+  router.post("/api/tournament/:id/run-match", publicLimiter, async function(req, res) {
     const tournament = _tournaments.get(req.params.id);
     if (!tournament) return res.status(404).json({ error: "Tournament not found." });
 

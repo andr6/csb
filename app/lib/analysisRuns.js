@@ -1,5 +1,5 @@
 const { createAnalysisRunRepository } = require("./repositories/analysisRunRepository");
-const { createJsonAnalysisRunRepository } = require("./repositories/jsonAnalysisRunRepository");
+const { markFailure, markSuccess } = require("./repositoryHealth");
 const {
   computePatternStats,
   computePackStats,
@@ -27,16 +27,7 @@ const {
   ANALYTICS_POLICY,
 } = require("./config");
 
-function createRunRepository() {
-  try {
-    return createAnalysisRunRepository();
-  } catch (error) {
-    console.warn("[analysis-runs] sqlite unavailable, falling back to json:", error.message);
-    return createJsonAnalysisRunRepository();
-  }
-}
-
-const runRepository = createRunRepository();
+const runRepository = createAnalysisRunRepository();
 
 function roundNumber(value, digits) {
   const factor = Math.pow(10, digits || 0);
@@ -55,12 +46,12 @@ function buildCostFromHeuristics(modelId, modelMap) {
   const cheapSignals = [/mini/, /haiku/, /flash/, /nano/, /small/, /lite/, /gemma/, /gemini-flash/];
 
   if (premiumSignals.some(function(pattern) { return pattern.test(model); })) {
-    return { band: "premium", index: 3, unitCostUsd: 1.5, source: "heuristic" };
+    return { band: "premium", index: 3, unitCostUsd: roundNumber(1.5, 1), source: "heuristic" };
   }
   if (cheapSignals.some(function(pattern) { return pattern.test(model); })) {
-    return { band: "cheap", index: 1, unitCostUsd: 0.1, source: "heuristic" };
+    return { band: "cheap", index: 1, unitCostUsd: roundNumber(0.1, 1), source: "heuristic" };
   }
-  return { band: "standard", index: 2, unitCostUsd: 0.5, source: "heuristic" };
+  return { band: "standard", index: 2, unitCostUsd: roundNumber(0.5, 1), source: "heuristic" };
 }
 
 function estimateCostProfile(modelId, options) {
@@ -71,7 +62,7 @@ function estimateCostProfile(modelId, options) {
     return {
       band: detectCostBand(configuredCost),
       index: configuredCost <= 0.2 ? 1 : configuredCost >= 1 ? 3 : 2,
-      unitCostUsd: configuredCost,
+      unitCostUsd: roundNumber(configuredCost, 2),
       source: "configured",
     };
   }
@@ -331,31 +322,58 @@ function enrichAnalyticsSummary(summary, options) {
   };
 }
 
-function addAnalysisRun(run) {
+function withHealthFallback(fnName, fn) {
+  return function(...args) {
+    try {
+      const result = fn.apply(runRepository, args);
+      markSuccess();
+      return result;
+    } catch (e) {
+      markFailure();
+      console.warn("[analysis-runs] " + fnName + " failed:", e.message);
+      // Return safe defaults based on operation
+      if (fnName === "insertRun") throw e;
+      if (fnName === "listTopByScore") return [];
+      if (fnName === "listRecent") return { items: [], total: 0 };
+      if (fnName === "countRecent") return 0;
+      if (fnName === "getById") return null;
+      if (fnName === "stats") return { totalRuns: 0, latestRunAt: null };
+      if (fnName === "failureSummary") return {
+        totalFailures: 0, byStatus: {}, byModel: {}, byContestantProvider: {},
+        byJudgeProvider: {}, judgePhases: {}, errorMessages: {}, errorCategories: {},
+        upstreamStatuses: {}, latestJudgeParseFailures: [], byRetryPolicy: {},
+        byFallbackPolicy: {}, totalRetryAttempts: 0, fallbackRuns: 0,
+      };
+      throw e;
+    }
+  };
+}
+
+const addAnalysisRun = withHealthFallback("insertRun", function(run) {
   return runRepository.insertRun(run);
-}
+});
 
-function listTopAnalysisRunsByScore(limit) {
+const listTopAnalysisRunsByScore = withHealthFallback("listTopByScore", function(limit) {
   return runRepository.listTopByScore ? runRepository.listTopByScore(limit) : [];
-}
+});
 
-function listAnalysisRuns(options) {
+const listAnalysisRuns = withHealthFallback("listRecent", function(options) {
   return runRepository.listRecent(options);
-}
+});
 
-function countAnalysisRuns(options) {
+const countAnalysisRuns = withHealthFallback("countRecent", function(options) {
   return runRepository.countRecent ? runRepository.countRecent(options) : runRepository.listRecent(options).length;
-}
+});
 
-function getAnalysisRun(id) {
+const getAnalysisRun = withHealthFallback("getById", function(id) {
   return runRepository.getById(id);
-}
+});
 
-function getAnalysisRunStats() {
+const getAnalysisRunStats = withHealthFallback("stats", function() {
   return runRepository.stats();
-}
+});
 
-function getAnalysisFailureSummary(options) {
+const getAnalysisFailureSummary = withHealthFallback("failureSummary", function(options) {
   return runRepository.failureSummary ? runRepository.failureSummary(options) : {
     totalFailures: 0,
     byStatus: {},
@@ -372,7 +390,7 @@ function getAnalysisFailureSummary(options) {
     totalRetryAttempts: 0,
     fallbackRuns: 0,
   };
-}
+});
 
 function getAnalysisAnalytics(options) {
   const summary = runRepository.analyticsSummary ? runRepository.analyticsSummary(options) : {
