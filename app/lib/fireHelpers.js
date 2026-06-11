@@ -59,6 +59,24 @@ function getLeaderboardItems(deps) {
     : [];
 }
 
+function getWorstLeaderboardItems(deps) {
+  const worstRuns = (deps.listBottomAnalysisRunsByScore || function() { return []; })(20)
+    .filter(function(run) {
+      var answer = run.responses && run.crownModelId ? run.responses[run.crownModelId] : "";
+      return run.crownModelId && run.prompt && isDisplayableLeaderboardAnswer(answer);
+    })
+    .map(function(run) {
+      return {
+        modelId: String(run.crownModelId || ""),
+        prompt: String(run.prompt || ""),
+        score: Number(run.crownScore || 0),
+        createdAt: run.createdAt || "",
+        answer: String((run.responses && run.responses[run.crownModelId]) || ""),
+      };
+    });
+  return worstRuns.slice(0, 10);
+}
+
 function categorizeError(message, upstreamStatus, phase) {
   const text = String(message || "").toLowerCase();
   const status = Number(upstreamStatus || 0);
@@ -168,6 +186,7 @@ module.exports = {
   validatePageToken,
   isDisplayableLeaderboardAnswer,
   getLeaderboardItems,
+  getWorstLeaderboardItems,
   categorizeError,
   buildRunFilters,
   buildFailureRun,

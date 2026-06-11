@@ -357,6 +357,10 @@ const listTopAnalysisRunsByScore = withHealthFallback("listTopByScore", function
   return runRepository.listTopByScore ? runRepository.listTopByScore(limit) : [];
 });
 
+const listBottomAnalysisRunsByScore = withHealthFallback("listBottomByScore", function(limit) {
+  return runRepository.listBottomByScore ? runRepository.listBottomByScore(limit) : [];
+});
+
 const listAnalysisRuns = withHealthFallback("listRecent", function(options) {
   return runRepository.listRecent(options);
 });
@@ -555,6 +559,7 @@ function getPromptLengthVsScore(options) {
 module.exports = {
   addAnalysisRun: addAnalysisRun,
   listTopAnalysisRunsByScore: listTopAnalysisRunsByScore,
+  listBottomAnalysisRunsByScore: listBottomAnalysisRunsByScore,
   getPatternStats: getPatternStats,
   getPackStats: getPackStats,
   getModeStats: getModeStats,

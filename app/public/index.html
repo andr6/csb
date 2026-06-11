@@ -249,6 +249,9 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
 .lb-body-label{flex-shrink:0;font-size:.52rem;color:var(--gold);letter-spacing:.18em;text-transform:uppercase;padding-top:.18rem;min-width:4.5rem;text-align:right}
 .lb-prompt-text{font-size:.72rem;color:#d0c8b8;line-height:1.6;font-style:italic}
 .lb-answer-text{font-size:.68rem;color:#8a8378;line-height:1.65;white-space:normal;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.lb-answer-text.expanded{-webkit-line-clamp:unset;display:block;overflow:auto}
+.lb-expand-btn{align-self:flex-end;flex-shrink:0;background:none;border:none;color:var(--gold);font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;padding:0;margin-left:auto;opacity:.75;transition:opacity .15s}
+.lb-expand-btn:hover{opacity:1;text-decoration:underline}
 
 /* ANALYTICS */
 .analytics{margin-top:3rem}

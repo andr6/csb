@@ -710,6 +710,18 @@ export async function refreshHistory() {
   }
 }
 
+export async function refreshWorstAnswers() {
+  if (state.isAnalyticsPage) return;
+  try {
+    const res = await fetch("/api/worst");
+    const data = await res.json();
+    state.worstAnswers = Array.isArray(data.items) ? data.items : [];
+    renderLeaderboard();
+  } catch (e) {
+    console.warn("Worst answers refresh failed:", e.message);
+  }
+}
+
 export async function refreshAnalytics(params) {
   if (!state.isAnalyticsPage && !state.showAnalyticsOnIndex) return;
   try {

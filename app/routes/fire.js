@@ -13,7 +13,7 @@ const modelServices = require("../lib/models");
 const providerServices = require("../lib/providers");
 const { getHealthyModelIds } = require("../lib/modelHealth");
 const { validatePrompt: _validatePrompt, validateContestantResponse: _validateContestantResponse } = require("../lib/validation");
-const { validatePageToken, getLeaderboardItems, categorizeError } = require("../lib/fireHelpers");
+const { validatePageToken, getLeaderboardItems, getWorstLeaderboardItems, categorizeError } = require("../lib/fireHelpers");
 
 // Cache prompt JSON files at module load time — they only change on deploy
 const _PACK_PROMPTS = (function() {
@@ -60,6 +60,14 @@ function createFireRouter(deps) {
       items: getLeaderboardItems({
         listTopAnalysisRunsByScore: deps.listTopAnalysisRunsByScore,
         readHistory: deps.readHistory || require("../lib/history").readHistory,
+      }),
+    });
+  });
+
+  router.get("/api/worst", deps.publicLimiter, function(req, res) {
+    res.json({
+      items: getWorstLeaderboardItems({
+        listBottomAnalysisRunsByScore: deps.listBottomAnalysisRunsByScore,
       }),
     });
   });

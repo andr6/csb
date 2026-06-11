@@ -199,6 +199,21 @@ function createAnalysisRunRepository() {
     ].join("\n")).map(rowToRun);
   }
 
+  function listBottomByScore(limit) {
+    const safeLimit = Math.max(1, Math.min(50, Number(limit || 10)));
+    return queryJson([
+      "SELECT id, prompt, pack, mode, responses_json AS responses, judgement_json AS judgement,",
+      "  crown_model_id AS crownModelId, crown_score AS crownScore,",
+      "  contestant_provider AS contestantProvider, judge_provider AS judgeProvider,",
+      "  judge_model AS judgeModel, timings_json AS timings, execution_json AS execution,",
+      "  created_at AS createdAt",
+      "FROM analysis_runs",
+      "WHERE crown_model_id != '' AND crown_score > 0",
+      "ORDER BY crown_score ASC, created_at DESC",
+      "LIMIT " + safeLimit + ";",
+    ].join("\n")).map(rowToRun);
+  }
+
   function stats() {
     const rows = queryJson([
       "SELECT",
@@ -380,6 +395,7 @@ function createAnalysisRunRepository() {
     insertRun: insertRun,
     listRecent: listRecent,
     listTopByScore: listTopByScore,
+    listBottomByScore: listBottomByScore,
     countRecent: countRecent,
     analyticsSummary: analyticsSummary,
     getById: getById,

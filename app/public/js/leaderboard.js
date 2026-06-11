@@ -9,12 +9,13 @@ export function renderLeaderboard() {
   }
   var lb = document.getElementById("leaderboard");
   if (!lb) return;
-  lb.style.display = state.history.length ? "block" : "none";
-  if (!state.history.length) return;
+  var items = state.worstAnswers && state.worstAnswers.length ? state.worstAnswers : state.history;
+  lb.style.display = items.length ? "block" : "none";
+  if (!items.length) return;
   var list = document.getElementById("lbList");
   if (!list) return;
   list.textContent = "";
-  state.history.slice(0, 10).forEach(function(entry, index) {
+  items.slice(0, 10).forEach(function(entry, index) {
     list.appendChild(buildLeaderboardRow(entry, index + 1));
   });
 }

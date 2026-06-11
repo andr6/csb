@@ -32,6 +32,7 @@ export const state = {
   autoVotes: {},    // { modelId: idx }
   userVotes: {},    // { modelId: idx }
   history: [],
+  worstAnswers: [],
   responses: {},
   recentRuns: [],
   activeRunId: null,

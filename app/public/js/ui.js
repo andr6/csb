@@ -212,6 +212,27 @@ export function buildLeaderboardRow(entry, rank) {
     var preview = entry.answer.slice(0, 180);
     answerText.textContent = preview + (entry.answer.length > 180 ? "..." : "");
     answerRow.appendChild(answerText);
+
+    if (entry.answer.length > 180) {
+      var expandBtn = document.createElement("button");
+      expandBtn.className = "lb-expand-btn";
+      expandBtn.type = "button";
+      expandBtn.textContent = "Show more";
+      expandBtn.onclick = function() {
+        var isExpanded = answerText.classList.contains("expanded");
+        if (isExpanded) {
+          answerText.classList.remove("expanded");
+          answerText.textContent = preview + "...";
+          expandBtn.textContent = "Show more";
+        } else {
+          answerText.classList.add("expanded");
+          answerText.textContent = entry.answer;
+          expandBtn.textContent = "Show less";
+        }
+      };
+      answerRow.appendChild(expandBtn);
+    }
+
     body.appendChild(answerRow);
   }
 

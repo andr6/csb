@@ -2,7 +2,7 @@ import { state, VOTE_LABELS } from "./state.js";
 import { modelName, modelColor, modelGlyph, shitTier, detectSymptoms, calcShitScore, getBlindLabel, getBlindGlyph, getBlindMaker, esc, setDisplay, typewrite, showError, createBlindMapping, categorizeClientError } from "./utils.js";
 import { fireModel, judgeResponses } from "./api.js";
 import { buildScorePill, buildCrownBanner, buildSymptoms, setVerdictContent, renderVoteButtons, buildLoadingCard, renderShareLink, renderReplayDiff, populateVersusPickers } from "./ui.js";
-import { renderAnalytics, inspectRun, refreshHistory, refreshRuns, refreshFailureSummary, refreshAnalytics, getCurrentRunFilters } from "./analytics.js";
+import { renderAnalytics, inspectRun, refreshHistory, refreshWorstAnswers, refreshRuns, refreshFailureSummary, refreshAnalytics, getCurrentRunFilters } from "./analytics.js";
 import { runTournament } from "./tournament.js";
 
 export function getActiveModels() {
@@ -159,6 +159,7 @@ export async function fire() {
 
   var currentFilters = getCurrentRunFilters();
   await refreshHistory();
+  await refreshWorstAnswers();
   await refreshRuns(currentFilters);
   await refreshFailureSummary(currentFilters);
   await refreshAnalytics(currentFilters);

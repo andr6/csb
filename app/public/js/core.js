@@ -98,6 +98,7 @@ export function init() {
 
 export function _continueInit() {
   var emptyHistoryPayload = { items: [] };
+  var emptyWorstPayload = { items: [] };
   var emptyRunsPayload = { items: [] };
   var emptyFailurePayload = { totalFailures: 0, byStatus: {}, byModel: {}, byContestantProvider: {}, byJudgeProvider: {}, judgePhases: {}, errorMessages: {}, errorCategories: {}, upstreamStatuses: {}, latestJudgeParseFailures: [], byRetryPolicy: {}, byFallbackPolicy: {}, totalRetryAttempts: 0, fallbackRuns: 0 };
   var emptyAnalyticsPayload = {
@@ -152,6 +153,7 @@ export function _continueInit() {
         batchPromise,
         fetch("/api/pack-prompts",  { headers: tokenHeader }).then(function(r) { return r.json(); }).catch(function() { return null; }),
         fetch("/api/mode-prompts",  { headers: tokenHeader }).then(function(r) { return r.json(); }).catch(function() { return null; }),
+        fetch("/api/worst").then(function(r) { return r.json(); }).catch(function() { return emptyWorstPayload; }),
       ];
 
       return Promise.all(requests).then(function(results) {
@@ -163,6 +165,7 @@ export function _continueInit() {
       var results = batch.results;
       var historyPayload = results[0];
       var runsPayload = results[1];
+      var worstPayload = results[5];
       var b = batch.batch || {};
       var failurePayload = b.failures || results[2];
       var analyticsPayload = b.analytics || results[3];
@@ -227,6 +230,7 @@ export function _continueInit() {
       };
       updateOAuthButtonVisibility(cfg.oauthProviders);
       state.history = Array.isArray(historyPayload.items) ? historyPayload.items : [];
+      state.worstAnswers = Array.isArray(worstPayload.items) ? worstPayload.items : [];
       state.recentRuns = Array.isArray(runsPayload.items) ? runsPayload.items : [];
       state.failureSummary = failurePayload || null;
       state.analyticsSummary = analyticsPayload || null;
