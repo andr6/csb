@@ -277,6 +277,7 @@ function createApp(overrides) {
     fireLimiter,
     requireKnownOrigin,
     dailyTryIncrement,
+    listBottomAnalysisRunsByScore: deps.listBottomAnalysisRunsByScore || analysisRunServices.listBottomAnalysisRunsByScore,
   }));
 
   app.use(createRunsRouter({
