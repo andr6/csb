@@ -69,10 +69,6 @@ function getDb() {
   throw _dbError;
 }
 
-function escapeSqlString(value) {
-  return String(value).replace(/'/g, "''");
-}
-
 function runSql(sql) {
   getDb().exec(sql);
 }
@@ -113,15 +109,32 @@ function closeAndReopen() {
   return getDb();
 }
 
+// Cross-driver transaction wrapper. Both better-sqlite3 and node-sqlite3-wasm
+// support BEGIN/COMMIT/ROLLBACK via exec(). The callback receives no arguments
+// and should use the existing runSqlParams/queryJsonParams helpers.
+function runTransaction(fn) {
+  const db = getDb();
+  db.exec("BEGIN");
+  try {
+    const result = fn();
+    db.exec("COMMIT");
+    return result;
+  } catch (e) {
+    try { db.exec("ROLLBACK"); } catch (_) {}
+    throw e;
+  }
+}
+
 module.exports = {
   DB_PATH,
   DATA_DIR,
   ensureDataDir,
-  escapeSqlString,
+  getDb,
   runSql,
   queryJson,
   runSqlParams,
   queryJsonParams,
+  runTransaction,
   isWasm: function() { return _usingWasm; },
   healthCheck,
   closeAndReopen,

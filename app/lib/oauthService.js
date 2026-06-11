@@ -2,7 +2,7 @@ const https = require("node:https");
 const querystring = require("node:querystring");
 const crypto = require("node:crypto");
 
-const SESSION_SECRET = process.env.SESSION_SECRET || "";
+const { SESSION_SECRET } = require("./config");
 const STATE_TTL_MS = 5 * 60 * 1000;
 
 // In-memory state store is DEPRECATED — we now use signed JWTs for stateless
@@ -52,13 +52,27 @@ function generateState() {
 }
 
 // ── Signed JWT state (stateless, works across processes) ─────────────────────
-function buildStateJwt(provider, codeVerifier) {
+function buildStateJwt(provider) {
   return _buildJwt({
     provider: provider,
-    cv: codeVerifier,
     iat: Date.now(),
     exp: Date.now() + STATE_TTL_MS,
   });
+}
+
+// ── PKCE cookie helpers ──────────────────────────────────────────────────────
+function buildPkceCookie(verifier) {
+  return _buildJwt({
+    verifier: verifier,
+    iat: Date.now(),
+    exp: Date.now() + STATE_TTL_MS,
+  });
+}
+
+function parsePkceCookie(token) {
+  const payload = _parseJwt(token);
+  if (!payload) return null;
+  return payload.verifier || null;
 }
 
 // ── PKCE ─────────────────────────────────────────────────────────────────────
@@ -87,7 +101,6 @@ function validateState(state) {
   if (jwtPayload) {
     return {
       provider: jwtPayload.provider,
-      code_verifier: jwtPayload.cv,
     };
   }
 
@@ -246,6 +259,8 @@ module.exports = {
   generateState,
   buildStateJwt,
   generatePKCE,
+  buildPkceCookie,
+  parsePkceCookie,
   storeState,
   validateState,
   buildAuthUrl,

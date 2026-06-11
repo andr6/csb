@@ -4,6 +4,9 @@ const http = require("node:http");
 const { Duplex } = require("node:stream");
 
 process.env.ALLOWED_ORIGINS = "https://chatshitbob.com, https://www.chatshitbob.com";
+process.env.SESSION_SECRET = "test-session-secret-32-bytes-long!!";
+process.env.PAGE_TOKEN_SECRET = "test-page-token-secret-32-bytes!!";
+process.env.RESET_SECRET = "test-reset-secret-32-bytes-long!!";
 process.env.ACTIVE_MODELS = "alpha,beta";
 process.env.MODEL_ALPHA = "openai/gpt-4o-mini";
 process.env.MODEL_BETA = "anthropic/claude-sonnet-4-5";

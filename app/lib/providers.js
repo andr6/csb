@@ -380,10 +380,11 @@ function callContestant(modelId, system, userPrompt, requestId) {
   });
 }
 
-function callJudge(system, userPrompt, requestId) {
-  if (requestId) console.log("[judge] [req:" + requestId + "] judge via " + JUDGE_PROVIDER);
+function callJudge(system, userPrompt, requestId, judgeModel) {
+  var model = judgeModel || JUDGE_MODEL;
+  if (requestId) console.log("[judge] [req:" + requestId + "] judge via " + JUDGE_PROVIDER + " (" + model + ")");
   return withRetry(function() {
-    return dispatch(JUDGE_PROVIDER, JUDGE_MODEL, system, userPrompt, JUDGE_KEYS, JUDGE_TIMEOUT_MS, requestId, true);
+    return dispatch(JUDGE_PROVIDER, model, system, userPrompt, JUDGE_KEYS, JUDGE_TIMEOUT_MS, requestId, true);
   }, { maxRetries: 2 });
 }
 

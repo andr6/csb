@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 process.env.NODE_ENV = "test";
 process.env.SESSION_SECRET = "test-secret-32-bytes-long-ok";
 
-const { generatePKCE, buildStateJwt, validateState, generateState, storeState } = require("../lib/oauthService");
+const { generatePKCE, buildStateJwt, validateState, generateState, storeState, buildPkceCookie, parsePkceCookie } = require("../lib/oauthService");
 
 test("generatePKCE produces verifier and challenge", function() {
   var pkce = generatePKCE();
@@ -21,22 +21,20 @@ test("generatePKCE challenge is S256 of verifier", function() {
 });
 
 test("buildStateJwt returns a three-part JWT", function() {
-  var jwt = buildStateJwt("google", "verifier123");
+  var jwt = buildStateJwt("google");
   var parts = jwt.split(".");
   assert.equal(parts.length, 3);
 });
 
-test("validateState parses valid JWT and extracts provider + code_verifier", function() {
-  var pkce = generatePKCE();
-  var jwt = buildStateJwt("facebook", pkce.code_verifier);
+test("validateState parses valid JWT and extracts provider", function() {
+  var jwt = buildStateJwt("facebook");
   var parsed = validateState(jwt);
   assert.ok(parsed, "parsed successfully");
   assert.equal(parsed.provider, "facebook");
-  assert.equal(parsed.code_verifier, pkce.code_verifier);
 });
 
 test("validateState rejects tampered JWT", function() {
-  var jwt = buildStateJwt("google", "v");
+  var jwt = buildStateJwt("google");
   var tampered = jwt.slice(0, -5) + "XXXXX";
   var parsed = validateState(tampered);
   assert.equal(parsed, null);
@@ -50,7 +48,7 @@ test("validateState rejects expired JWT", async function() {
   function base64url(str) { return Buffer.from(str, "utf8").toString("base64url"); }
   function sign(data, s) { return crypto.createHmac("sha256", s).update(data).digest("base64url"); }
   var header = base64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
-  var body = base64url(JSON.stringify({ provider: "google", cv: "v", iat: Date.now() - 10000, exp: Date.now() - 1 }));
+  var body = base64url(JSON.stringify({ provider: "google", iat: Date.now() - 10000, exp: Date.now() - 1 }));
   var sig = sign(header + "." + body, secret);
   var expiredJwt = header + "." + body + "." + sig;
   var parsed = validateState(expiredJwt);
@@ -63,7 +61,6 @@ test("validateState falls back to legacy Map for raw state strings", function() 
   var parsed = validateState(raw);
   assert.ok(parsed, "legacy fallback worked");
   assert.equal(parsed.provider, "google");
-  assert.equal(parsed.code_verifier, "legacy-v");
 });
 
 test("validateState returns null for empty input", function() {
@@ -76,4 +73,32 @@ test("generateState returns 48-char hex string", function() {
   var s = generateState();
   assert.equal(s.length, 48);
   assert.ok(/^[a-f0-9]+$/.test(s));
+});
+
+test("buildPkceCookie returns signed JWT containing verifier", function() {
+  var pkce = generatePKCE();
+  var cookie = buildPkceCookie(pkce.code_verifier);
+  var parts = cookie.split(".");
+  assert.equal(parts.length, 3);
+  var parsed = parsePkceCookie(cookie);
+  assert.equal(parsed, pkce.code_verifier);
+});
+
+test("parsePkceCookie rejects tampered cookie", function() {
+  var pkce = generatePKCE();
+  var cookie = buildPkceCookie(pkce.code_verifier);
+  var tampered = cookie.slice(0, -5) + "XXXXX";
+  assert.equal(parsePkceCookie(tampered), null);
+});
+
+test("parsePkceCookie rejects expired cookie", function() {
+  var crypto = require("node:crypto");
+  var secret = process.env.SESSION_SECRET;
+  function base64url(str) { return Buffer.from(str, "utf8").toString("base64url"); }
+  function sign(data, s) { return crypto.createHmac("sha256", s).update(data).digest("base64url"); }
+  var header = base64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  var body = base64url(JSON.stringify({ verifier: "v", iat: Date.now() - 10000, exp: Date.now() - 1 }));
+  var sig = sign(header + "." + body, secret);
+  var expired = header + "." + body + "." + sig;
+  assert.equal(parsePkceCookie(expired), null);
 });

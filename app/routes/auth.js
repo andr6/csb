@@ -5,6 +5,9 @@ const {
   MAIL_FROM: _MAIL_FROM,
   MAIL_USER: _MAIL_USER,
   ADMIN_EMAIL: _ADMIN_EMAIL,
+  SESSION_SECRET: _SESSION_SECRET,
+  RESET_SECRET: _RESET_SECRET,
+  PAGE_TOKEN_SECRET: _PAGE_TOKEN_SECRET,
 } = require("../lib/config");
 
 const _authService = require("../lib/authService");
@@ -29,6 +32,7 @@ function createAuthRouter(deps) {
   const sendSmsOtp = deps.sendSmsOtp;
   const emailTransporter = deps.emailTransporter;
   const oauthService = deps.oauthService || _oauthService;
+  const SESSION_SECRET = deps.SESSION_SECRET !== undefined ? deps.SESSION_SECRET : _SESSION_SECRET;
   const MAIL_FROM = deps.MAIL_FROM !== undefined ? deps.MAIL_FROM : _MAIL_FROM;
   const MAIL_USER = deps.MAIL_USER !== undefined ? deps.MAIL_USER : _MAIL_USER;
   const ADMIN_EMAIL = deps.ADMIN_EMAIL !== undefined ? deps.ADMIN_EMAIL : _ADMIN_EMAIL;
@@ -221,7 +225,7 @@ function createAuthRouter(deps) {
     });
   });
 
-  router.post("/api/auth/logout", authMw.requireAuth, async function(req, res) {
+  router.post("/api/auth/logout", publicLimiter, authMw.requireAuth, async function(req, res) {
     const authHeader = String(req.headers.authorization || "");
     const token = authHeader.slice(7).trim();
     const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
@@ -229,7 +233,7 @@ function createAuthRouter(deps) {
     res.json({ ok: true });
   });
 
-  router.get("/api/auth/me", authMw.requireAuth, async function(req, res) {
+  router.get("/api/auth/me", publicLimiter, authMw.requireAuth, async function(req, res) {
     res.json({
       user: {
         id: req.user.id,
@@ -442,7 +446,7 @@ function createAuthRouter(deps) {
 
   // ── Signed URL helpers for password reset ───────────────────────────────
   function signResetToken(token, expiresAt) {
-    const secret = process.env.RESET_SECRET || process.env.PAGE_TOKEN_SECRET || crypto.randomBytes(32).toString("hex");
+    const secret = _RESET_SECRET || _PAGE_TOKEN_SECRET || crypto.randomBytes(32).toString("hex");
     const payload = token + "|" + expiresAt;
     return crypto.createHmac("sha256", secret).update(payload).digest("hex");
   }
@@ -555,11 +559,21 @@ function createAuthRouter(deps) {
     facebook: !!(process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET),
   };
 
-  function getOAuthRedirectUri(provider, req) {
-    var base = process.env.OAUTH_REDIRECT_BASE || (req.headers.origin || "").replace(/^https?:\/\//, "");
+  function getOAuthRedirectUri(provider) {
+    const base = process.env.OAUTH_REDIRECT_BASE;
+    if (!base) {
+      throw new Error("OAUTH_REDIRECT_BASE is not configured.");
+    }
     // Strip any existing scheme so we don't double it (e.g. base already contains https://)
-    base = base.replace(/^https?:\/\//, "");
-    return "https://" + base + "/api/auth/oauth/" + provider + "/callback";
+    const cleanBase = base.replace(/^https?:\/\//, "");
+    return "https://" + cleanBase + "/api/auth/oauth/" + provider + "/callback";
+  }
+
+  function getOAuthPostMessageOrigin() {
+    const base = process.env.OAUTH_POSTMESSAGE_ORIGIN || process.env.OAUTH_REDIRECT_BASE || "";
+    if (!base) return "null";
+    if (base.startsWith("http://") || base.startsWith("https://")) return base;
+    return "https://" + base;
   }
 
   // Start OAuth flow — redirect to provider consent screen
@@ -570,10 +584,19 @@ function createAuthRouter(deps) {
     }
 
     const pkce = oauthService.generatePKCE();
-    const state = oauthService.buildStateJwt(provider, pkce.code_verifier);
+    const state = oauthService.buildStateJwt(provider);
+    const pkceCookie = oauthService.buildPkceCookie(pkce.code_verifier);
 
-    const redirectUri = getOAuthRedirectUri(provider, req);
+    const redirectUri = getOAuthRedirectUri(provider);
     const authUrl = oauthService.buildAuthUrl(provider, state, redirectUri, pkce);
+
+    res.cookie("pkce_verifier", pkceCookie, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "Lax",
+      maxAge: 5 * 60 * 1000,
+      path: "/",
+    });
     res.redirect(authUrl);
   });
 
@@ -599,10 +622,17 @@ function createAuthRouter(deps) {
       return renderOAuthResult(res, { error: "Invalid or expired OAuth state." });
     }
 
+    // PKCE verifier is stored in an httpOnly cookie, not in the state JWT
+    const pkceCookie = String(req.cookies && req.cookies.pkce_verifier ? req.cookies.pkce_verifier : "");
+    const codeVerifier = oauthService.parsePkceCookie(pkceCookie);
+    if (!codeVerifier) {
+      return renderOAuthResult(res, { error: "Invalid or expired OAuth session." });
+    }
+
     let profile;
     try {
-      const redirectUri = getOAuthRedirectUri(provider, req);
-      profile = await oauthService.exchangeCode(provider, code, redirectUri, stateMeta.code_verifier);
+      const redirectUri = getOAuthRedirectUri(provider);
+      profile = await oauthService.exchangeCode(provider, code, redirectUri, codeVerifier);
     } catch (e) {
       console.error("[oauth]", provider, "exchange failed:", e.message);
       return renderOAuthResult(res, { error: "OAuth token exchange failed." });
@@ -666,15 +696,18 @@ function createAuthRouter(deps) {
   });
 
   function renderOAuthResult(res, payload) {
+    const targetOrigin = getOAuthPostMessageOrigin();
     const html =
       '<!DOCTYPE html><html><head><title>OAuth Result</title></head><body>' +
       '<script>' +
-      'try { window.opener.postMessage(' + JSON.stringify(JSON.stringify({ type: "oauth_result", payload: payload })) + ', "*"); } catch(e) {}' +
+      'try { window.opener.postMessage(' + JSON.stringify({ type: "oauth_result", payload: payload }) + ', ' + JSON.stringify(targetOrigin) + '); } catch(e) {}' +
       'setTimeout(function() { window.close(); }, 500);' +
       '</script>' +
       '<p>' + (payload.error ? "Authentication failed." : "Authentication successful. You can close this window.") + '</p>' +
       '</body></html>';
     res.setHeader("Content-Type", "text/html");
+    // Clear the PKCE cookie immediately
+    res.clearCookie("pkce_verifier", { path: "/", httpOnly: true, secure: true, sameSite: "Lax" });
     res.send(html);
   }
 

@@ -250,6 +250,111 @@ function normalizeJudgePayload(judgement, responseKeys) {
   };
 }
 
+// ── Multi-judge consensus ────────────────────────────────────────────────────
+// Given an array of per-judge normalized payloads (each from a different judge
+// model), compute consensus scores, inter-rater reliability, and per-judge bias.
+function computeConsensus(judges, responseKeys) {
+  if (!judges || !judges.length) return null;
+  if (judges.length === 1) {
+    var j = judges[0];
+    return {
+      scores: j.scores,
+      verdicts: j.verdicts,
+      crown: j.crown,
+      roast: j.roast,
+      consensusConfidence: "single",
+      interRaterReliability: 1,
+      perJudgeBreakdown: [{ model: j.judgeModel || "unknown", scores: j.scores }],
+    };
+  }
+
+  const modelIds = (Array.isArray(responseKeys) && responseKeys.length) ? responseKeys : ACTIVE_MODEL_IDS;
+
+  // Collect all scores per model across judges
+  const allScores = {};
+  modelIds.forEach(function(id) {
+    allScores[id] = judges.map(function(j) { return j.scores && j.scores[id] !== undefined ? Number(j.scores[id]) : 0; });
+  });
+
+  // Median consensus score per model
+  const consensusScores = {};
+  modelIds.forEach(function(id) {
+    var sorted = allScores[id].slice().sort(function(a, b) { return a - b; });
+    var mid = Math.floor(sorted.length / 2);
+    consensusScores[id] = sorted.length % 2 !== 0 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+  });
+
+  // Inter-rater reliability: average pairwise Kendall tau-b (simplified to agreement %)
+  // For simplicity with small panels, compute average % of models where all judges agree on order
+  var agreementCount = 0;
+  var totalComparisons = 0;
+  for (var i = 0; i < modelIds.length; i++) {
+    for (var j = i + 1; j < modelIds.length; j++) {
+      var idA = modelIds[i];
+      var idB = modelIds[j];
+      var agree = true;
+      for (var k = 0; k < judges.length; k++) {
+        var scoreA = judges[k].scores && judges[k].scores[idA] !== undefined ? Number(judges[k].scores[idA]) : 0;
+        var scoreB = judges[k].scores && judges[k].scores[idB] !== undefined ? Number(judges[k].scores[idB]) : 0;
+        var prevA = k > 0 ? (judges[k - 1].scores && judges[k - 1].scores[idA] !== undefined ? Number(judges[k - 1].scores[idA]) : 0) : scoreA;
+        var prevB = k > 0 ? (judges[k - 1].scores && judges[k - 1].scores[idB] !== undefined ? Number(judges[k - 1].scores[idB]) : 0) : scoreB;
+        if (k > 0) {
+          var signPrev = prevA > prevB ? 1 : prevA < prevB ? -1 : 0;
+          var signCurr = scoreA > scoreB ? 1 : scoreA < scoreB ? -1 : 0;
+          if (signPrev !== signCurr && signPrev !== 0 && signCurr !== 0) {
+            agree = false;
+            break;
+          }
+        }
+      }
+      if (agree) agreementCount++;
+      totalComparisons++;
+    }
+  }
+  var irr = totalComparisons > 0 ? agreementCount / totalComparisons : 1;
+
+  // Crown from consensus scores
+  var crown = modelIds.reduce(function(best, curr) {
+    return consensusScores[curr] > consensusScores[best] ? curr : best;
+  }, modelIds[0]);
+
+  // Per-judge breakdown
+  var breakdown = judges.map(function(j, idx) {
+    var bias = {};
+    modelIds.forEach(function(id) {
+      var judgeScore = j.scores && j.scores[id] !== undefined ? Number(j.scores[id]) : 0;
+      bias[id] = Math.round((judgeScore - consensusScores[id]) * 100) / 100;
+    });
+    return {
+      judgeModel: j.judgeModel || "judge-" + (idx + 1),
+      scores: j.scores,
+      biasVsConsensus: bias,
+    };
+  });
+
+  // Use roast from median judge
+  var medianJudge = judges[Math.floor(judges.length / 2)];
+
+  // Confidence based on spread and IRR
+  var maxSpread = 0;
+  modelIds.forEach(function(id) {
+    var s = allScores[id];
+    var spread = Math.max.apply(null, s) - Math.min.apply(null, s);
+    if (spread > maxSpread) maxSpread = spread;
+  });
+  var confidence = irr >= 0.8 && maxSpread <= 15 ? "high" : irr >= 0.5 && maxSpread <= 25 ? "medium" : "low";
+
+  return {
+    scores: consensusScores,
+    verdicts: medianJudge.verdicts || {},
+    crown: crown,
+    roast: medianJudge.roast || "",
+    consensusConfidence: confidence,
+    interRaterReliability: Math.round(irr * 1000) / 1000,
+    perJudgeBreakdown: breakdown,
+  };
+}
+
 module.exports = {
   JUDGE_SYSTEM_PROMPT: JUDGE_SYSTEM_PROMPT,
   getDefaultJudgeSystemPrompt: getDefaultJudgeSystemPrompt,
@@ -259,6 +364,7 @@ module.exports = {
   getCriteriaForMode: getCriteriaForMode,
   buildJudgePrompt: buildJudgePrompt,
   computeMedianScores: computeMedianScores,
+  computeConsensus: computeConsensus,
   parseJudgeResponse: parseJudgeResponse,
   validateJudgePayload: validateJudgePayload,
   normalizeJudgePayload: normalizeJudgePayload,

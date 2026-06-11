@@ -5,25 +5,6 @@ const DAILY_JUDGE_LIMIT = process.env.MAX_DAILY_JUDGE_CALLS ? Number(process.env
 
 let _sqliteReady = true;
 
-function _ensureTable() {
-  if (!_sqliteReady) return;
-  try {
-    runSqlParams(
-      "CREATE TABLE IF NOT EXISTS daily_limits (" +
-      "  day TEXT PRIMARY KEY," +
-      "  fire_count INTEGER NOT NULL DEFAULT 0," +
-      "  judge_count INTEGER NOT NULL DEFAULT 0" +
-      ");",
-      []
-    );
-  } catch (e) {
-    _sqliteReady = false;
-    console.warn("[daily-limits] SQLite unavailable, falling back to permissive mode:", e.message);
-  }
-}
-
-_ensureTable();
-
 function _today() {
   return new Date().toISOString().slice(0, 10);
 }

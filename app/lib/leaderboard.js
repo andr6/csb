@@ -1,11 +1,4 @@
-function isDisplayableLeaderboardAnswer(answer) {
-  var text = String(answer || "").trim();
-  if (!text) return false;
-  if (/^\[error:/i.test(text)) return false;
-  if (/failed:/i.test(text)) return false;
-  if (/timed out/i.test(text)) return false;
-  return true;
-}
+const { isDisplayableLeaderboardAnswer } = require("./fireHelpers");
 
 function createLeaderboardService(deps) {
   const readHistory = deps.readHistory;
@@ -42,4 +35,4 @@ function createLeaderboardService(deps) {
   return { getLeaderboardItems };
 }
 
-module.exports = { isDisplayableLeaderboardAnswer, createLeaderboardService };
+module.exports = { createLeaderboardService };

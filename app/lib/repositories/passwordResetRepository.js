@@ -1,22 +1,24 @@
-const { runSqlParams, queryJsonParams } = require("../sqlite");
+const { runSqlParams, queryJsonParams, runTransaction } = require("../sqlite");
 
 function createPasswordResetRepository() {
   function createToken({ userId, tokenHash, expiresAt }) {
     const now = new Date().toISOString();
-    // Invalidate any previous active tokens for this user
-    runSqlParams(
-      "UPDATE password_reset_tokens SET consumed_at = ? WHERE user_id = ? AND consumed_at IS NULL",
-      [now, userId]
-    );
-    runSqlParams(
-      "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?)",
-      [userId, tokenHash, expiresAt, now]
-    );
-    const row = queryJsonParams(
-      "SELECT id FROM password_reset_tokens WHERE token_hash = ?",
-      [tokenHash]
-    );
-    return row && row[0] ? row[0].id : null;
+    return runTransaction(function() {
+      // Invalidate any previous active tokens for this user
+      runSqlParams(
+        "UPDATE password_reset_tokens SET consumed_at = ? WHERE user_id = ? AND consumed_at IS NULL",
+        [now, userId]
+      );
+      runSqlParams(
+        "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?)",
+        [userId, tokenHash, expiresAt, now]
+      );
+      const row = queryJsonParams(
+        "SELECT id FROM password_reset_tokens WHERE token_hash = ?",
+        [tokenHash]
+      );
+      return row && row[0] ? row[0].id : null;
+    });
   }
 
   function findValidByHash(hash) {

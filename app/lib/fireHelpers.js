@@ -11,8 +11,10 @@ function validatePageToken(token) {
   const now = Math.floor(Date.now() / 1000);
   if (now - ts > PAGE_TOKEN_TTL_S) return false;
   if (ts > now + 60) return false;
+  const secret = process.env.PAGE_TOKEN_SECRET;
+  if (!secret) return false;  // secrets validated at startup; this is a defensive check
   const expected = crypto
-    .createHmac("sha256", process.env.PAGE_TOKEN_SECRET || "")
+    .createHmac("sha256", secret)
     .update(String(ts))
     .digest("hex");
   const eBuf = Buffer.from(expected, "hex");

@@ -5,6 +5,9 @@ const { Duplex } = require("node:stream");
 const crypto = require("node:crypto");
 
 process.env.NODE_ENV = "test";
+process.env.SESSION_SECRET = "test-session-secret-32-bytes-long!!";
+process.env.PAGE_TOKEN_SECRET = "test-page-token-secret-32-bytes!!";
+process.env.RESET_SECRET = "test-reset-secret-32-bytes-long!!";
 process.env.OTP_PEPPER = "test-otp-pepper";
 process.env.BCRYPT_ROUNDS = "10";
 
@@ -85,6 +88,36 @@ function invoke(app, method, url, body, headers) {
         headers: res.getHeaders(),
       });
     }
+
+    // Track Set-Cookie headers for cookie jar support
+    const setCookies = [];
+    const originalSetHeader = res.setHeader.bind(res);
+    res.setHeader = function(name, value) {
+      if (name.toLowerCase() === "set-cookie") {
+        const vals = Array.isArray(value) ? value : [value];
+        vals.forEach(function(v) { setCookies.push(v); });
+      }
+      return originalSetHeader(name, value);
+    };
+
+    res.cookie = function(name, value, options) {
+      var cookieStr = name + "=" + encodeURIComponent(value);
+      if (options) {
+        if (options.maxAge) cookieStr += "; Max-Age=" + Math.floor(options.maxAge / 1000);
+        if (options.httpOnly) cookieStr += "; HttpOnly";
+        if (options.secure) cookieStr += "; Secure";
+        if (options.sameSite) cookieStr += "; SameSite=" + options.sameSite;
+        if (options.path) cookieStr += "; Path=" + options.path;
+      }
+      setCookies.push(cookieStr);
+      originalSetHeader("Set-Cookie", setCookies);
+    };
+    res.clearCookie = function(name, options) {
+      var cookieStr = name + "=; Expires=Thu, 01 Jan 1970 00:00:00 GMT";
+      if (options && options.path) cookieStr += "; Path=" + options.path;
+      setCookies.push(cookieStr);
+      originalSetHeader("Set-Cookie", setCookies);
+    };
 
     res.write = function(chunk, encoding, callback) {
       if (chunk) raw += Buffer.isBuffer(chunk) ? chunk.toString() : chunk;
@@ -957,6 +990,9 @@ test("GET /api/auth/oauth/:provider/start redirects for configured provider", as
   assert.equal(res.statusCode, 302);
   assert.ok(res.headers.location.includes("accounts.google.com"));
   assert.ok(res.headers.location.includes("client_id=test-google-id"));
+  // Verify PKCE cookie was set
+  const cookies = res.headers["set-cookie"] || [];
+  assert.ok(cookies.some(function(c) { return c.includes("pkce_verifier"); }), "pkce_verifier cookie set");
 });
 
 test("GET /api/auth/oauth/:provider/start returns 400 for unconfigured provider", async function() {
@@ -980,6 +1016,7 @@ test("GET /api/auth/oauth/:provider/callback creates new user and issues session
 
   const originalExchange = oauthService.exchangeCode;
   const originalValidate = oauthService.validateState;
+  const originalParsePkce = oauthService.parsePkceCookie;
   oauthService.exchangeCode = async function() {
     return {
       provider: "google",
@@ -991,10 +1028,12 @@ test("GET /api/auth/oauth/:provider/callback creates new user and issues session
     };
   };
   oauthService.validateState = function() { return true; };
+  oauthService.parsePkceCookie = function() { return "test-verifier"; };
 
   const app = createAuthApp();
   const res = await invoke(app, "GET", "/api/auth/oauth/google/callback?code=testcode&state=teststate", null, {
     origin: "https://chatshitbob.com",
+    cookie: "pkce_verifier=testcookie",
   });
 
   assert.equal(res.statusCode, 200);
@@ -1011,6 +1050,7 @@ test("GET /api/auth/oauth/:provider/callback creates new user and issues session
 
   oauthService.exchangeCode = originalExchange;
   oauthService.validateState = originalValidate;
+  oauthService.parsePkceCookie = originalParsePkce;
 });
 
 test("GET /api/auth/oauth/:provider/callback links to existing user by email", async function() {
@@ -1030,6 +1070,7 @@ test("GET /api/auth/oauth/:provider/callback links to existing user by email", a
 
   const originalExchange = oauthService.exchangeCode;
   const originalValidate = oauthService.validateState;
+  const originalParsePkce = oauthService.parsePkceCookie;
   oauthService.exchangeCode = async function() {
     return {
       provider: "google",
@@ -1041,9 +1082,11 @@ test("GET /api/auth/oauth/:provider/callback links to existing user by email", a
     };
   };
   oauthService.validateState = function() { return true; };
+  oauthService.parsePkceCookie = function() { return "test-verifier"; };
 
   const res = await invoke(app, "GET", "/api/auth/oauth/google/callback?code=testcode&state=teststate", null, {
     origin: "https://chatshitbob.com",
+    cookie: "pkce_verifier=testcookie",
   });
 
   assert.equal(res.statusCode, 200);
@@ -1055,6 +1098,7 @@ test("GET /api/auth/oauth/:provider/callback links to existing user by email", a
 
   oauthService.exchangeCode = originalExchange;
   oauthService.validateState = originalValidate;
+  oauthService.parsePkceCookie = originalParsePkce;
 });
 
 test("GET /api/auth/oauth/:provider/callback links to existing user by OAuth pair", async function() {
@@ -1067,6 +1111,7 @@ test("GET /api/auth/oauth/:provider/callback links to existing user by OAuth pai
 
   const originalExchange = oauthService.exchangeCode;
   const originalValidate = oauthService.validateState;
+  const originalParsePkce = oauthService.parsePkceCookie;
   oauthService.exchangeCode = async function() {
     return {
       provider: "google",
@@ -1078,13 +1123,16 @@ test("GET /api/auth/oauth/:provider/callback links to existing user by OAuth pai
     };
   };
   oauthService.validateState = function() { return true; };
+  oauthService.parsePkceCookie = function() { return "test-verifier"; };
 
   await invoke(app, "GET", "/api/auth/oauth/google/callback?code=testcode&state=teststate", null, {
     origin: "https://chatshitbob.com",
+    cookie: "pkce_verifier=testcookie",
   });
 
   const res = await invoke(app, "GET", "/api/auth/oauth/google/callback?code=testcode2&state=teststate2", null, {
     origin: "https://chatshitbob.com",
+    cookie: "pkce_verifier=testcookie",
   });
 
   assert.equal(res.statusCode, 200);
@@ -1094,4 +1142,5 @@ test("GET /api/auth/oauth/:provider/callback links to existing user by OAuth pai
 
   oauthService.exchangeCode = originalExchange;
   oauthService.validateState = originalValidate;
+  oauthService.parsePkceCookie = originalParsePkce;
 });

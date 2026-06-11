@@ -10,6 +10,23 @@ function createTournamentRouter(deps) {
   const runSqlParams = deps.runSqlParams || require("../lib/sqlite").runSqlParams;
   const queryJsonParams = deps.queryJsonParams || require("../lib/sqlite").queryJsonParams;
 
+  const _validatePageToken = deps.validatePageToken || require("../lib/fireHelpers").validatePageToken;
+  const _dailyTryIncrement = deps.dailyTryIncrement || require("../lib/dailyLimits").dailyTryIncrement;
+
+  function requireToken(req, res, next) {
+    if (!_validatePageToken(req.headers["x-page-token"])) {
+      return res.status(403).json({ error: "Forbidden." });
+    }
+    next();
+  }
+
+  function requireAuth(req, res, next) {
+    if (authMw && authMw.requireAuth) {
+      return authMw.requireAuth(req, res, next);
+    }
+    next();
+  }
+
   // Services for auto-run match endpoint
   const {
     CONTESTANT_PROVIDER: _CONTESTANT_PROVIDER,
@@ -49,6 +66,17 @@ function createTournamentRouter(deps) {
 
   // In-memory tournament cache — read-through cache backed by SQLite
   const _tournaments = new Map();
+  const MAX_CACHED_TOURNAMENTS = 50;
+
+  function _setTournament(id, tournament) {
+    if (_tournaments.size >= MAX_CACHED_TOURNAMENTS && !_tournaments.has(id)) {
+      // Evict oldest entries (Map preserves insertion order)
+      var evictCount = Math.ceil(MAX_CACHED_TOURNAMENTS * 0.2); // evict 20%
+      var keys = Array.from(_tournaments.keys()).slice(0, evictCount);
+      keys.forEach(function(k) { _tournaments.delete(k); });
+    }
+    _tournaments.set(id, tournament);
+  }
 
   // Load pending/running tournaments from DB into cache on startup
   try {
@@ -67,7 +95,7 @@ function createTournamentRouter(deps) {
         completedAt: row.completed_at,
         champion: row.status === "complete" ? JSON.parse(row.bracket_json).champion : undefined,
       };
-      _tournaments.set(row.id, t);
+      _setTournament(row.id, t);
     });
     if (rows.length) {
       console.log("[tournament] loaded " + rows.length + " pending/running tournament(s) from DB");
@@ -87,14 +115,14 @@ function createTournamentRouter(deps) {
     }
   }
 
-  router.post("/api/tournament", publicLimiter, function(req, res) {
+  router.post("/api/tournament", publicLimiter, requireToken, function(req, res) {
     const models = Array.isArray(req.body.models) ? req.body.models : [];
     if (models.length < 2 || models.length > 16) {
       return res.status(400).json({ error: "Provide 2–16 model IDs." });
     }
     try {
       const tournament = tournamentServices.createBracket(models);
-      _tournaments.set(tournament.id, tournament);
+      _setTournament(tournament.id, tournament);
       saveTournament(tournament);
       res.json({ id: tournament.id, bracketSize: tournament.bracketSize, rounds: tournament.rounds.length });
     } catch (e) {
@@ -123,7 +151,7 @@ function createTournamentRouter(deps) {
             completedAt: row.completed_at,
             champion: row.status === "complete" ? JSON.parse(row.bracket_json).champion : undefined,
           };
-          _tournaments.set(row.id, tournament);
+          _setTournament(row.id, tournament);
         }
       } catch (e) {
         console.warn("[tournament] DB read failed:", e.message);
@@ -133,7 +161,69 @@ function createTournamentRouter(deps) {
     res.json(tournament);
   });
 
-  router.post("/api/tournament/:id/advance", publicLimiter, function(req, res) {
+  // ── Bracket visualization JSON ────────────────────────────────────────────────
+  router.get("/api/tournament/:id/bracket", publicLimiter, function(req, res) {
+    const tournament = _tournaments.get(req.params.id);
+    if (!tournament) {
+      // Cache miss — try DB
+      try {
+        const rows = queryJsonParams(
+          "SELECT id, models_json, bracket_json, status, created_at, completed_at FROM tournaments WHERE id = ?;",
+          [req.params.id]
+        );
+        if (rows.length) {
+          const row = rows[0];
+          const t = {
+            id: row.id,
+            models: JSON.parse(row.models_json),
+            bracketSize: JSON.parse(row.bracket_json).bracketSize || 0,
+            rounds: JSON.parse(row.bracket_json).rounds || [],
+            status: row.status,
+            createdAt: row.created_at,
+            completedAt: row.completed_at,
+            champion: row.status === "complete" ? JSON.parse(row.bracket_json).champion : undefined,
+          };
+          _setTournament(row.id, t);
+          return res.json(_formatBracket(t));
+        }
+      } catch (e) {
+        console.warn("[tournament] DB read failed:", e.message);
+      }
+      return res.status(404).json({ error: "Tournament not found." });
+    }
+    res.json(_formatBracket(tournament));
+  });
+
+  function _formatBracket(t) {
+    var rounds = t.rounds.map(function(round, rIdx) {
+      return {
+        roundIndex: rIdx,
+        roundName: rIdx === t.rounds.length - 1 ? "Final" : rIdx === t.rounds.length - 2 ? "Semi-final" : "Round " + (rIdx + 1),
+        matches: round.matches.map(function(match, mIdx) {
+          return {
+            matchIndex: mIdx,
+            slotA: match.slotA ? { id: match.slotA.id, name: match.slotA.name || match.slotA.id } : null,
+            slotB: match.slotB ? { id: match.slotB.id, name: match.slotB.name || match.slotB.id } : null,
+            winner: match.winner || null,
+            aScore: match.aScore !== undefined ? match.aScore : null,
+            bScore: match.bScore !== undefined ? match.bScore : null,
+            bye: !match.slotA || !match.slotB,
+          };
+        }),
+      };
+    });
+    return {
+      id: t.id,
+      status: t.status,
+      bracketSize: t.bracketSize,
+      champion: t.champion || null,
+      createdAt: t.createdAt,
+      completedAt: t.completedAt || null,
+      rounds: rounds,
+    };
+  }
+
+  router.post("/api/tournament/:id/advance", publicLimiter, requireToken, function(req, res) {
     const tournament = _tournaments.get(req.params.id);
     if (!tournament) return res.status(404).json({ error: "Tournament not found." });
     const roundIdx = Number(req.body.roundIdx);
@@ -150,9 +240,14 @@ function createTournamentRouter(deps) {
   });
 
   // E5 — auto-run a single tournament match server-side
-  router.post("/api/tournament/:id/run-match", publicLimiter, async function(req, res) {
+  router.post("/api/tournament/:id/run-match", publicLimiter, requireToken, async function(req, res) {
     const tournament = _tournaments.get(req.params.id);
     if (!tournament) return res.status(404).json({ error: "Tournament not found." });
+
+    const inc = _dailyTryIncrement("fire");
+    if (!inc.allowed) {
+      return res.status(503).json({ error: "Daily request limit reached. Try again tomorrow." });
+    }
 
     const roundIdx = Number(req.body.roundIdx);
     const matchIdx = Number(req.body.matchIdx);

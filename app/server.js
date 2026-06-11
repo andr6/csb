@@ -1,10 +1,13 @@
 const path = require("node:path");
-require("dotenv").config({ path: path.join(__dirname, ".env"), override: process.env.NODE_ENV !== "test" });
+// System environment variables always take precedence over .env file values.
+// Tests that need overrides should set process.env before requiring config.
+require("dotenv").config({ path: path.join(__dirname, ".env"), override: false });
 
 const { PORT, HTTP_TIMEOUT_MS, CONTESTANT_TIMEOUT_MS, JUDGE_TIMEOUT_MS, ALLOWED_ORIGINS, CONTESTANT_PROVIDER, JUDGE_PROVIDER, JUDGE_MODEL, MODEL_MAP, WEBHOOK_URL } = require("./lib/config");
 const metricsServices = require("./lib/metrics");
-const { createApp } = require("./app");
+const { createApp, seedAdminUser } = require("./app");
 const { startWebhookProcessor } = require("./lib/webhookQueue");
+const { runBackup } = require("./lib/backup");
 
 metricsServices.loadMetrics(metricsServices.defaultStore);
 
@@ -12,6 +15,13 @@ metricsServices.loadMetrics(metricsServices.defaultStore);
 require("./lib/migrations").applyPendingMigrations();
 
 const app = createApp();
+
+// Side effects that belong outside the factory
+seedAdminUser().catch(function(e) { console.error("[auth] Admin user seed failed:", e.message); });
+
+// Daily SQLite backup — run once on startup, then every 24 hours
+runBackup();
+setInterval(runBackup, 24 * 60 * 60 * 1000);
 
 function startServer() {
   return app.listen(PORT, function() {

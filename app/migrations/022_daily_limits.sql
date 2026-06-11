@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS daily_limits (
+  day TEXT PRIMARY KEY,
+  fire_count INTEGER NOT NULL DEFAULT 0,
+  judge_count INTEGER NOT NULL DEFAULT 0
+);

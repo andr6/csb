@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const cookieParser = require("cookie-parser");
 const path = require("path");
 const crypto = require("crypto");
 
@@ -16,7 +17,9 @@ const {
   MAIL_FROM,
   SMS_API_KEY,
   ADMIN_EMAIL,
+  PAGE_TOKEN_SECRET,
 } = require("./lib/config");
+require("./lib/config").validateSecrets();
 const { buildCorsOptions, isAllowedOrigin } = require("./lib/cors");
 const modelServices = require("./lib/models");
 const providerServices = require("./lib/providers");
@@ -36,8 +39,8 @@ const authService = require("./lib/authService");
 const { createAuthMiddleware } = require("./lib/middleware/authMiddleware");
 const { createRequireAdminAccess } = require("./lib/middleware/requireAdminAuth");
 const { createLeaderboardService } = require("./lib/leaderboard");
+const { validatePageToken: _validatePageToken } = require("./lib/fireHelpers");
 const { createRateLimiters, tryCreateStore } = require("./lib/rateLimiters");
-const { runBackup } = require("./lib/backup");
 const logger = require("./lib/logger");
 const nodemailer = require("nodemailer");
 
@@ -49,6 +52,7 @@ const { createChallengeRouter } = require("./routes/challenge");
 const { createAnalyticsRouter } = require("./routes/analytics");
 const { createPromptsRouter } = require("./routes/prompts");
 const { createTournamentRouter } = require("./routes/tournament");
+const { createAdminRouter } = require("./routes/admin");
 const { createHealthRouter } = require("./routes/health");
 const { createConfigRouter } = require("./routes/config");
 const { createRunRouter } = require("./routes/run");
@@ -57,28 +61,12 @@ const { createRunRouter } = require("./routes/run");
 const { dailyTryIncrement } = require("./lib/dailyLimits");
 
 // ── Page token ─ gates /api/fire and /api/judge to visitors who loaded the page ──
-const PAGE_TOKEN_SECRET = process.env.PAGE_TOKEN_SECRET || crypto.randomBytes(32).toString("hex");
 const PAGE_TOKEN_TTL_S = 86400;
 
 function generatePageToken() {
   const ts = Math.floor(Date.now() / 1000);
   const sig = crypto.createHmac("sha256", PAGE_TOKEN_SECRET).update(String(ts)).digest("hex");
   return ts + "." + sig;
-}
-
-function validatePageToken(token) {
-  if (!token || typeof token !== "string") return false;
-  const dot = token.indexOf(".");
-  if (dot === -1) return false;
-  const ts = Number(token.slice(0, dot));
-  if (!ts || isNaN(ts)) return false;
-  const now = Math.floor(Date.now() / 1000);
-  if (now - ts > PAGE_TOKEN_TTL_S) return false;
-  if (ts > now + 60) return false;
-  const expected = crypto.createHmac("sha256", PAGE_TOKEN_SECRET).update(String(ts)).digest("hex");
-  const eBuf = Buffer.from(expected, "hex");
-  const aBuf = Buffer.from(token.slice(dot + 1), "hex");
-  return eBuf.length === aBuf.length && crypto.timingSafeEqual(eBuf, aBuf);
 }
 
 // Rejects requests whose Origin header doesn't match ALLOWED_ORIGINS.
@@ -118,9 +106,7 @@ function createApp(overrides) {
   const otpRepo = deps.otpRepository || createOtpRepository();
   const sessionRepo = deps.sessionRepository || createSessionRepository();
   const resetRepo = deps.passwordResetRepository || createPasswordResetRepository();
-  const authMw = deps.authMiddleware || (process.env.NODE_ENV === "test"
-    ? { requireAuth: function(req, res, next) { next(); }, requirePhoneVerified: function(req, res, next) { next(); } }
-    : createAuthMiddleware({ userRepository: userRepo, sessionRepository: sessionRepo }));
+  const authMw = deps.authMiddleware || createAuthMiddleware({ userRepository: userRepo, sessionRepository: sessionRepo });
 
   // Deprecation warning: ANALYTICS_PAGE_PASSWORD is no longer used
   if (process.env.ANALYTICS_PAGE_PASSWORD) {
@@ -128,57 +114,6 @@ function createApp(overrides) {
   }
 
   // Admin user seed — one-time setup with signed URL (no raw password in stdout)
-  async function seedAdminUser() {
-    if (process.env.NODE_ENV === "test") return;
-    const existing = userRepo.findByEmail(ADMIN_EMAIL);
-    if (existing) return;
-
-    // Check if setup was already completed
-    try {
-      const { queryJsonParams } = require("./lib/sqlite");
-      const setupRows = queryJsonParams("SELECT value FROM app_settings WHERE key = ?", ["admin_setup_complete"]);
-      if (setupRows.length && setupRows[0].value === "1") return;
-    } catch (e) {
-      // app_settings may not exist yet — migration will create it
-    }
-
-    const generatedPassword = crypto.randomBytes(8).toString("hex");
-    const passwordHash = await authService.hashPassword(generatedPassword);
-    const userId = userRepo.createUser({
-      fullName: "admin",
-      email: ADMIN_EMAIL,
-      phone: "+10000000000",
-      passwordHash: passwordHash,
-    });
-    if (!userId) { console.error("[auth] Failed to seed admin user"); return; }
-    const now = new Date().toISOString();
-    runSqlParams(
-      "UPDATE users SET email_verified = 1, phone_verified = 1, first_login_completed = 1, updated_at = ? WHERE id = ?",
-      [now, userId]
-    );
-
-    // Store hash in app_settings so password can be rotated without re-printing
-    runSqlParams(
-      "INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)",
-      ["admin_password_hash", passwordHash]
-    );
-
-    // Generate one-time setup token with HMAC signature
-    const setupToken = crypto.randomBytes(16).toString("hex");
-    const setupSig = crypto.createHmac("sha256", process.env.SETUP_SECRET || PAGE_TOKEN_SECRET).update(setupToken).digest("hex");
-    const setupUrl = "/admin-setup?t=" + setupToken + "&s=" + setupSig;
-
-    console.log("=".repeat(60));
-    console.log("ADMIN USER CREATED");
-    console.log("Email:    " + ADMIN_EMAIL);
-    console.log("One-time setup URL: " + setupUrl);
-    console.log("=".repeat(60));
-    console.log(JSON.stringify({ type: "security", event: "admin_user_seeded", userId: userId }));
-  }
-  if (process.env.NODE_ENV !== "test") {
-    seedAdminUser().catch(function(e) { console.error("[auth] Admin user seed failed:", e.message); });
-  }
-
   // Email / SMS OTP transport
   let emailTransporter = null;
   if (MAIL_HOST && MAIL_USER && MAIL_PASS) {
@@ -240,6 +175,7 @@ function createApp(overrides) {
 
   // Middleware
   app.use(express.json({ limit: "100kb" }));
+  app.use(cookieParser());
   app.set("trust proxy", 1);
 
   // Request ID — correlation ID for tracing
@@ -385,6 +321,8 @@ function createApp(overrides) {
     ...deps,
     authMiddleware: authMw,
     publicLimiter,
+    validatePageToken: _validatePageToken,
+    dailyTryIncrement: dailyTryIncrement,
   }));
 
   app.use(createHealthRouter({
@@ -396,6 +334,13 @@ function createApp(overrides) {
 
   app.use(createRunRouter({ getAnalysisRun }));
 
+  app.use(createAdminRouter({
+    ...deps,
+    authMiddleware: authMw,
+    requireAdminAuth,
+    publicLimiter,
+  }));
+
   app.all("/api/*", function(req, res) {
     res.status(404).json({ error: "Not found." });
   });
@@ -404,11 +349,61 @@ function createApp(overrides) {
     res.sendFile(path.join(__dirname, "public", "index.html"));
   });
 
-  // Daily SQLite backup — run once on startup, then every 24 hours
-  runBackup();
-  setInterval(runBackup, 24 * 60 * 60 * 1000);
-
   return app;
 }
 
-module.exports = { createApp };
+// Standalone admin seed — call from server.js after createApp(), not inside the factory.
+async function seedAdminUser() {
+  if (process.env.NODE_ENV === "test") return;
+  const { ADMIN_EMAIL } = require("./lib/config");
+  const { createUserRepository } = require("./lib/repositories/userRepository");
+  const { runSqlParams, queryJsonParams } = require("./lib/sqlite");
+  const authService = require("./lib/authService");
+  const userRepo = createUserRepository();
+
+  const existing = userRepo.findByEmail(ADMIN_EMAIL);
+  if (existing) return;
+
+  // Check if setup was already completed
+  try {
+    const setupRows = queryJsonParams("SELECT value FROM app_settings WHERE key = ?", ["admin_setup_complete"]);
+    if (setupRows.length && setupRows[0].value === "1") return;
+  } catch (e) {
+    // app_settings may not exist yet — migration will create it
+  }
+
+  const generatedPassword = require("crypto").randomBytes(8).toString("hex");
+  const passwordHash = await authService.hashPassword(generatedPassword);
+  const userId = userRepo.createUser({
+    fullName: "admin",
+    email: ADMIN_EMAIL,
+    phone: "+10000000000",
+    passwordHash: passwordHash,
+  });
+  if (!userId) { console.error("[auth] Failed to seed admin user"); return; }
+  const now = new Date().toISOString();
+  runSqlParams(
+    "UPDATE users SET email_verified = 1, phone_verified = 1, first_login_completed = 1, updated_at = ? WHERE id = ?",
+    [now, userId]
+  );
+
+  // Store hash in app_settings so password can be rotated without re-printing
+  runSqlParams(
+    "INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)",
+    ["admin_password_hash", passwordHash]
+  );
+
+  // Generate one-time setup token with HMAC signature
+  const setupToken = require("crypto").randomBytes(16).toString("hex");
+  const setupSig = require("crypto").createHmac("sha256", process.env.SETUP_SECRET || PAGE_TOKEN_SECRET).update(setupToken).digest("hex");
+  const setupUrl = "/admin-setup?t=" + setupToken + "&s=" + setupSig;
+
+  console.log("=".repeat(60));
+  console.log("ADMIN USER CREATED");
+  console.log("Email:    " + ADMIN_EMAIL);
+  console.log("One-time setup URL: " + setupUrl);
+  console.log("=".repeat(60));
+  console.log(JSON.stringify({ type: "security", event: "admin_user_seeded", userId: userId }));
+}
+
+module.exports = { createApp, seedAdminUser };

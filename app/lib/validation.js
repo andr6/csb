@@ -44,8 +44,32 @@ function validateContestantResponse(text) {
   return { ok: true };
 }
 
+// Limit total size of responses before embedding into judge prompt.
+// Prevents excessive token usage from malicious or accidental large inputs.
+function validateJudgeInput(responses, maxTotalChars, maxPerResponseChars) {
+  maxTotalChars = maxTotalChars || 50000;
+  maxPerResponseChars = maxPerResponseChars || 10000;
+  if (!responses || typeof responses !== "object") {
+    return { ok: false, reason: "Responses must be an object." };
+  }
+  var total = 0;
+  var keys = Object.keys(responses);
+  for (var i = 0; i < keys.length; i++) {
+    var text = String(responses[keys[i]] || "");
+    total += text.length;
+    if (text.length > maxPerResponseChars) {
+      return { ok: false, reason: "Response for " + keys[i] + " exceeds " + maxPerResponseChars + " characters." };
+    }
+  }
+  if (total > maxTotalChars) {
+    return { ok: false, reason: "Total responses exceed " + maxTotalChars + " characters." };
+  }
+  return { ok: true };
+}
+
 module.exports = {
   validatePrompt: validatePrompt,
   clampScore: clampScore,
   validateContestantResponse: validateContestantResponse,
+  validateJudgeInput: validateJudgeInput,
 };

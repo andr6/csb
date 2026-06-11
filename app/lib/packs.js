@@ -409,4 +409,47 @@ function buildCharacterVoice(pack, modelId, modelString) {
   return pack.characterBase + " You are the " + name.toUpperCase() + " variant — " + flavour;
 }
 
-module.exports = { PACKS, DEFAULT_PACK, getPack, buildCharacterVoice };
+// ── Dynamic packs (loaded from app_settings at runtime) ──────────────────────
+// Admin users can create/edit/delete packs without a code deploy.
+var _dynamicPacks = {};
+
+function _loadDynamicPacks() {
+  try {
+    var { queryJsonParams } = require("./sqlite");
+    var rows = queryJsonParams("SELECT value FROM app_settings WHERE key = ?", ["dynamic_packs"]);
+    if (rows.length && rows[0].value) {
+      var parsed = JSON.parse(rows[0].value);
+      if (parsed && typeof parsed === "object") {
+        _dynamicPacks = parsed;
+      }
+    }
+  } catch (e) {
+    // app_settings may not exist yet — ignore
+  }
+}
+
+// Load on first require
+_loadDynamicPacks();
+
+function reloadDynamicPacks() {
+  _loadDynamicPacks();
+}
+
+function getDynamicPacks() {
+  return Object.assign({}, _dynamicPacks);
+}
+
+function saveDynamicPacks(packs) {
+  var { runSqlParams } = require("./sqlite");
+  runSqlParams(
+    "INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)",
+    ["dynamic_packs", JSON.stringify(packs), new Date().toISOString()]
+  );
+  _dynamicPacks = packs;
+}
+
+function getPackWithDynamic(id) {
+  return _dynamicPacks[id] || PACKS[id] || PACKS[DEFAULT_PACK];
+}
+
+module.exports = { PACKS, DEFAULT_PACK, getPack: getPackWithDynamic, buildCharacterVoice, reloadDynamicPacks, getDynamicPacks, saveDynamicPacks };

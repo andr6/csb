@@ -1,22 +1,24 @@
-const { runSqlParams, queryJsonParams } = require("../sqlite");
+const { runSqlParams, queryJsonParams, runTransaction } = require("../sqlite");
 
 function createOtpRepository() {
   function createOtp({ userId, type, hash, expiresAt }) {
     const now = new Date().toISOString();
-    // Invalidate any previous active OTP for this user+type
-    runSqlParams(
-      "UPDATE otps SET consumed_at = ? WHERE user_id = ? AND otp_type = ? AND consumed_at IS NULL",
-      [now, userId, type]
-    );
-    runSqlParams(
-      "INSERT INTO otps (user_id, otp_type, otp_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?)",
-      [userId, type, hash, expiresAt, now]
-    );
-    const row = queryJsonParams(
-      "SELECT id FROM otps WHERE user_id = ? AND otp_type = ? ORDER BY created_at DESC LIMIT 1",
-      [userId, type]
-    );
-    return row && row[0] ? row[0].id : null;
+    return runTransaction(function() {
+      // Invalidate any previous active OTP for this user+type
+      runSqlParams(
+        "UPDATE otps SET consumed_at = ? WHERE user_id = ? AND otp_type = ? AND consumed_at IS NULL",
+        [now, userId, type]
+      );
+      runSqlParams(
+        "INSERT INTO otps (user_id, otp_type, otp_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?)",
+        [userId, type, hash, expiresAt, now]
+      );
+      const row = queryJsonParams(
+        "SELECT id FROM otps WHERE user_id = ? AND otp_type = ? ORDER BY created_at DESC LIMIT 1",
+        [userId, type]
+      );
+      return row && row[0] ? row[0].id : null;
+    });
   }
 
   function findValidOtp(userId, type) {

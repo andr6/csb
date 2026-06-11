@@ -49,11 +49,19 @@ function pruneOldBackups() {
 function runBackup() {
   ensureBackupsDir();
   const filename = backupFilename();
-  const destPath = path.join(BACKUPS_DIR, filename);
+  const destPath = path.resolve(path.join(BACKUPS_DIR, filename));
+
+  // Path traversal guard: destination must live inside BACKUPS_DIR.
+  if (!destPath.startsWith(path.resolve(BACKUPS_DIR) + path.sep)) {
+    console.error("[backup] aborted: path escapes backups directory");
+    return { ok: false, error: "Invalid backup path." };
+  }
 
   try {
     // VACUUM INTO creates a consistent snapshot without locking the source DB.
     // Works with both better-sqlite3 and node-sqlite3-wasm (SQLite ≥3.27).
+    // SQLite VACUUM INTO does not accept placeholders; the path is system-built
+    // above and validated against traversal, so inline escaping is acceptable.
     runSql("VACUUM INTO '" + destPath.replace(/'/g, "''") + "';");
     console.log("[backup] created", destPath);
     pruneOldBackups();

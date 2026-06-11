@@ -15,6 +15,25 @@ const { getHealthyModelIds } = require("../lib/modelHealth");
 const { validatePrompt: _validatePrompt, validateContestantResponse: _validateContestantResponse } = require("../lib/validation");
 const { validatePageToken, getLeaderboardItems, categorizeError } = require("../lib/fireHelpers");
 
+// Cache prompt JSON files at module load time — they only change on deploy
+const _PACK_PROMPTS = (function() {
+  try {
+    return fs.readFileSync(path.join(__dirname, "..", "lib", "prompts", "pack-prompts.json"), "utf8");
+  } catch (e) {
+    console.warn("[fire] pack-prompts.json cache failed:", e.message);
+    return null;
+  }
+})();
+
+const _MODE_PROMPTS = (function() {
+  try {
+    return fs.readFileSync(path.join(__dirname, "..", "lib", "prompts", "mode-prompts.json"), "utf8");
+  } catch (e) {
+    console.warn("[fire] mode-prompts.json cache failed:", e.message);
+    return null;
+  }
+})();
+
 function createFireRouter(deps) {
   const router = express.Router();
 
@@ -46,25 +65,19 @@ function createFireRouter(deps) {
   });
 
   router.get("/api/pack-prompts", deps.publicLimiter, function(req, res) {
-    const filePath = path.join(__dirname, "..", "lib", "prompts", "pack-prompts.json");
-    try {
-      const data = fs.readFileSync(filePath, "utf8");
-      res.setHeader("Content-Type", "application/json");
-      res.send(data);
-    } catch (e) {
-      res.status(500).json({ error: "Prompt data unavailable." });
+    if (!_PACK_PROMPTS) {
+      return res.status(500).json({ error: "Prompt data unavailable." });
     }
+    res.setHeader("Content-Type", "application/json");
+    res.send(_PACK_PROMPTS);
   });
 
   router.get("/api/mode-prompts", deps.publicLimiter, function(req, res) {
-    const filePath = path.join(__dirname, "..", "lib", "prompts", "mode-prompts.json");
-    try {
-      const data = fs.readFileSync(filePath, "utf8");
-      res.setHeader("Content-Type", "application/json");
-      res.send(data);
-    } catch (e) {
-      res.status(500).json({ error: "Prompt data unavailable." });
+    if (!_MODE_PROMPTS) {
+      return res.status(500).json({ error: "Prompt data unavailable." });
     }
+    res.setHeader("Content-Type", "application/json");
+    res.send(_MODE_PROMPTS);
   });
 
   router.post("/api/fire", fireLimiter, requireKnownOrigin, async function(req, res) {
@@ -120,7 +133,7 @@ function createFireRouter(deps) {
   });
 
   // Blind taste test mapping — generated server-side, tamper-proof
-  router.get("/api/blind-mapping", function(req, res) {
+  router.get("/api/blind-mapping", deps.publicLimiter, function(req, res) {
     const validateToken = deps.validatePageToken || validatePageToken;
     if (!validateToken(req.headers["x-page-token"])) {
       return res.status(403).json({ error: "Forbidden." });

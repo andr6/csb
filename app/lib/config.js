@@ -1,3 +1,5 @@
+const crypto = require("crypto");
+
 function parseAllowedOrigins(value) {
   var origins = String(value || "")
     .split(",")
@@ -97,24 +99,26 @@ const JUDGE_KEYS = {
 
 const JUDGE_PROVIDER = (process.env.JUDGE_PROVIDER || "anthropic").toLowerCase();
 const JUDGE_MODEL = process.env.JUDGE_MODEL || "anthropic/claude-sonnet-4-5";
+const JUDGE_PANEL = (process.env.JUDGE_PANEL || "").split(",").map(function(s) { return s.trim(); }).filter(Boolean);
 const LITELLM_BASE = process.env.LITELLM_BASE_URL || "http://localhost:4000";
 const CONTESTANT_PROVIDER = (process.env.CONTESTANT_PROVIDER || "openrouter").toLowerCase();
 
 const MODEL_CATALOGUE = {};
 Object.keys(process.env).forEach(function(key) {
-  if (/^MODEL_[A-Z0-9_]+$/.test(key)) {
-    var id = key.replace(/^MODEL_/, "").toLowerCase();
-    var value = process.env[key];
-    if (!value || typeof value !== "string" || value.trim().length === 0) {
-      console.warn("[config] Skipping empty model env var:", key);
-      return;
-    }
-    if (value.indexOf("/") === -1) {
-      console.warn("[config] Skipping model env var without provider prefix:", key, "=", value);
-      return;
-    }
-    MODEL_CATALOGUE[id] = value.trim();
+  // Fast-path reject: avoid regex on every env var
+  if (!key.startsWith("MODEL_")) return;
+  if (!/^MODEL_[A-Z0-9_]+$/.test(key)) return;
+  var id = key.replace(/^MODEL_/, "").toLowerCase();
+  var value = process.env[key];
+  if (!value || typeof value !== "string" || value.trim().length === 0) {
+    console.warn("[config] Skipping empty model env var:", key);
+    return;
   }
+  if (value.indexOf("/") === -1) {
+    console.warn("[config] Skipping model env var without provider prefix:", key, "=", value);
+    return;
+  }
+  MODEL_CATALOGUE[id] = value.trim();
 });
 
 var ACTIVE_MODELS;
@@ -209,6 +213,31 @@ const ANALYTICS_POLICY = {
     : 60,
 };
 
+// ── Secret validation ─────────────────────────────────────────────────────────
+function validateSecrets() {
+  var required = [
+    { name: "SESSION_SECRET", minLen: 32 },
+    { name: "PAGE_TOKEN_SECRET", minLen: 32 },
+    { name: "RESET_SECRET", minLen: 32 },
+  ];
+  required.forEach(function(item) {
+    var value = process.env[item.name];
+    if (!value || String(value).length < item.minLen) {
+      var generated = crypto.randomBytes(32).toString("hex");
+      process.env[item.name] = generated;
+      console.warn(
+        "[security] " + item.name + " was missing or too short. Auto-generated a secure value. " +
+        "Set it in .env for persistence across restarts."
+      );
+    }
+  });
+}
+validateSecrets();
+
+const SESSION_SECRET = process.env.SESSION_SECRET;
+const PAGE_TOKEN_SECRET = process.env.PAGE_TOKEN_SECRET;
+const RESET_SECRET = process.env.RESET_SECRET;
+
 module.exports = {
   PORT: PORT,
   HTTP_TIMEOUT_MS: HTTP_TIMEOUT_MS,
@@ -219,6 +248,7 @@ module.exports = {
   JUDGE_KEYS: JUDGE_KEYS,
   JUDGE_PROVIDER: JUDGE_PROVIDER,
   JUDGE_MODEL: JUDGE_MODEL,
+  JUDGE_PANEL: JUDGE_PANEL,
   LITELLM_BASE: LITELLM_BASE,
   CONTESTANT_PROVIDER: CONTESTANT_PROVIDER,
   MODEL_CATALOGUE: MODEL_CATALOGUE,
@@ -252,7 +282,11 @@ module.exports = {
   FACEBOOK_APP_ID: FACEBOOK_APP_ID,
   FACEBOOK_APP_SECRET: FACEBOOK_APP_SECRET,
   OAUTH_REDIRECT_BASE: OAUTH_REDIRECT_BASE,
+  SESSION_SECRET: SESSION_SECRET,
+  PAGE_TOKEN_SECRET: PAGE_TOKEN_SECRET,
+  RESET_SECRET: RESET_SECRET,
   parseAllowedOrigins: parseAllowedOrigins,
   parsePositiveNumber: parsePositiveNumber,
   parseModelPricing: parseModelPricing,
+  validateSecrets: validateSecrets,
 };
