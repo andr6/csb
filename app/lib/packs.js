@@ -363,7 +363,7 @@ const DEFAULT_PACK = "bar";
 
 // ── Provider flavor validation ────────────────────────────────────────────────
 // Warn when a pack has flavors for providers that aren't configured in .env.
-// This keeps the flavor system honest — dead strings don't silently accumulate.
+// Summarised into a single line to avoid log spam on startup.
 (function validateProviderFlavours() {
   try {
     const { ACTIVE_MODEL_IDS, MODEL_MAP } = require("./config");
@@ -372,16 +372,19 @@ const DEFAULT_PACK = "bar";
       var provider = String((MODEL_MAP[id] || "")).split("/")[0].toLowerCase();
       if (provider) activeProviders.add(provider);
     });
+    var dead = [];
     Object.keys(PACKS).forEach(function(packId) {
       var pack = PACKS[packId];
       if (!pack.providerFlavours) return;
       Object.keys(pack.providerFlavours).forEach(function(flavourProvider) {
         if (!activeProviders.has(flavourProvider)) {
-          console.warn("[packs] Pack '" + packId + "' has flavour for provider '" + flavourProvider +
-            "' but no active model uses that provider. Flavour will never be used.");
+          dead.push(packId + ":" + flavourProvider);
         }
       });
     });
+    if (dead.length) {
+      console.warn("[packs] " + dead.length + " unused provider flavour(s) (no active model): " + dead.slice(0, 8).join(", ") + (dead.length > 8 ? " …" : ""));
+    }
   } catch (e) {
     // Config may not be ready during some test scenarios — skip validation
   }
